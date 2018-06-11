@@ -5,6 +5,15 @@ cd ~/halo_cnn
 #interact -p GPU-shared --gres=gpu:p100:1 -t 02:00:00
 #interact --ntasks-per-node=27 -t 02:00:00
 
+printf "Generating data..."
+
+module load python3/intel_3.6.3
+
+python ./scripts/halo_cnn1d_r_data.py
+
+module unload python3/intel_3.6.3
+printf "Data generated.\n"
+
 
 
 printf "\nRunning ML..."
@@ -17,3 +26,12 @@ python ./scripts/halo_cnn1d_r_ml.py
 source deactivate
 
 module unload keras/2.0.6_anaconda
+
+
+
+printf "\nPlotting..."
+module load python3/intel_3.6.3
+
+python ./scripts/halo_cnn1d_r_plot.py
+
+module unload python3/intel_3.6.3

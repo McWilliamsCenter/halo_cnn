@@ -17,23 +17,25 @@ import matplotlib.pyplot as plt
 
 ## FUNCTIONS
 
-from tools.matt_tools import *
+import tools.matt_tools as matt
 
-
+## MODEL PARAMETERS
 wdir = '/home/mho1/scratch/halo_cnn/'
 
 model_name = 'halo_cnn1d_r'
 data_dir = os.path.join(wdir, 'saved_models', model_name, 'model_data')
-sdm_file = os.path.join(wdir,'raw','UM_0.5_MLv_0_preds.npy')
+
+sdm_file = os.path.join(wdir,'data_raw', 'UM_0.5_MLv_0_preds.npy')
 
 
+# Finding model number
 log = os.listdir(data_dir)
 
 log = [int(i.split('_')[-1][:-4]) for i in log if (i[:-len(i.split('_')[-1])-1]== model_name)]
 
 model_num = 0 if len(log)==0 else max(log)
 
-
+## File Specification
 save_model_name = model_name + '_' + str(model_num)
 model_dir = os.path.join(wdir, 'saved_models', model_name, save_model_name)
 
@@ -45,7 +47,7 @@ dat = np.load(  os.path.join(data_dir, save_model_name + '.npy'),
 par = dat['params']
 
 print('Loading SDM results...')
-sdm_dat = parseout(np.load(sdm_file))
+sdm_dat = matt.parseout(np.load(sdm_file))
 
 
 
@@ -58,7 +60,7 @@ one_to_one = np.arange(11)*(par['Y_max'] - par['Y_min'])/10. + par['Y_min']
 
 print('Power law predictions\n')
 
-y_regr = np.reshape(dat['y_regr'], (len(dat['y_regr']),1))
+y_regr = np.reshape(dat['y_train'], (len(dat['y_train']),1))
 y_regr_test = np.reshape(dat['y_test'], (len(dat['y_test']),1))
 
 
@@ -80,7 +82,7 @@ ax1 = f.add_subplot(gs[0,0])
 fit_y = one_to_one * regr.coef_ + regr.intercept_
 ax1.plot(one_to_one,fit_y,'r',label='fit')
 
-binnedplot(dat['y_regr'],
+matt.binnedplot(dat['y_train'],
                  dat['sigv_regr'],
                  n=50,
                  percentiles = [35,47.5],
@@ -98,7 +100,7 @@ ax1.legend(fontsize=8,loc=4)
 ax2 = f.add_subplot(gs[1,0],sharex=ax1)
                 
 ax2.plot(one_to_one,one_to_one,'k',linestyle='dashed')
-binnedplot(dat['y_test'],
+matt.binnedplot(dat['y_test'],
                  y_regr_pred,
                  n=75,
                  percentiles = [35],
@@ -123,16 +125,16 @@ print('SDM predictions\n')
 f,ax = plt.subplots(figsize=[4,4])
 
 ax.plot(one_to_one,one_to_one,'k',linestyle='dashed')
-binnedplot( sdm_dat[:,1],
-            sdm_dat[:,0],
-            n=50,
-            percentiles = [35,47.5],
-            ax=ax,
-            label='sdm_',
-            names=True,
-            c='g',
-            log=0
-           )
+matt.binnedplot(sdm_dat[:,1],
+                sdm_dat[:,0],
+                n=50,
+                percentiles = [35,47.5],
+                ax=ax,
+                label='sdm_',
+                names=True,
+                c='g',
+                log=0
+               )
 
 ax.set_xlim(xmin=par['Y_min'], xmax=par['Y_max'])
 
@@ -161,7 +163,7 @@ gs = mpl.gridspec.GridSpec(3,1,height_ratios=[3,2,1], hspace=0)
 ax1 = f.add_subplot(gs[0,0])
 ax1.plot(one_to_one,one_to_one, color='k', linestyle='dashed')
 
-binnedplot( dat['y_test'], dat['y_pred'], n=50, 
+matt.binnedplot( dat['y_test'], dat['y_pred'], n=50, 
             percentiles=[34,47.5], median=True, ax=ax1, log=0
             )
 ax1.set_ylabel(r'$\log[M_{pred}$]',fontsize=14)
@@ -171,12 +173,12 @@ ax1.legend(fontsize=8,loc=2)
 ax2 = f.add_subplot(gs[1,0], sharex=ax1)
 ax2.plot(one_to_one,[0]*len(one_to_one), color='k', linestyle='dashed')
 
-binnedplot(dat['y_test'],regr_err,n=25, percentiles=[34], median=True, ax=ax2, label='pow',c='r', errorbar=False, names=False, log=0)
+matt.binnedplot(dat['y_test'],regr_err,n=25, percentiles=[34], median=True, ax=ax2, label='pow',c='r', errorbar=False, names=False, log=0)
 
 
-binnedplot(dat['y_test'],pred_err,n=25, percentiles=[34], median=True, ax=ax2, label='cnn',c='b', errorbar=False, names=False, log=0)
+matt.binnedplot(dat['y_test'],pred_err,n=25, percentiles=[34], median=True, ax=ax2, label='cnn',c='b', errorbar=False, names=False, log=0)
 
-binnedplot(sdm_dat[:,1],sdm_err,n=25, percentiles=[34], median=True, ax=ax2, label='sdm',c='g', errorbar=False, names=False, log=0)
+matt.binnedplot(sdm_dat[:,1],sdm_err,n=25, percentiles=[34], median=True, ax=ax2, label='sdm',c='g', errorbar=False, names=False, log=0)
 
 ax2.set_ylim(ymin=-1.5,ymax=3)
 ax2.set_ylabel(r'$\epsilon$',fontsize=14)
@@ -186,8 +188,8 @@ ax2.legend(fontsize=8)
 
 
 ax3 = f.add_subplot(gs[2,0], sharex=ax1)
-_ = histplot(dat['y_train'], n=100, log=True, norm=True, label='train', ax=ax3)
-_ = histplot(dat['y_test'], n=100, log=True, norm=True, label='test', ax=ax3)
+_ = matt.histplot(dat['y_train'], n=100, log=True, norm=True, label='train', ax=ax3)
+_ = matt.histplot(dat['y_test'], n=100, log=True, norm=True, label='test', ax=ax3)
 
 
 ax3.set_ylabel('pdf',fontsize=14)
