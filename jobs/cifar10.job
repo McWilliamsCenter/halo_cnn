@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH -p GPU-shared
+#SBATCH -t 5:00:00
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH -e /home/mho1/pylon2/oe/%j.err
+#SBATCH -o /home/mho1/pylon2/oe/%j.out
+#SBATCH --gres=gpu:p100:1
+
+cd /home/mho1/2_pylon2/
+
+module load keras/2.0.6_anaconda
+
+source activate $KERAS_ENV
+
+python ./scripts/cifar10.py
+
+source deactivate
+
