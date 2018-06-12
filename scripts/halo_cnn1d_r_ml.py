@@ -33,7 +33,7 @@ par = OrderedDict([
     ('model_name'   ,   'halo_cnn1d_r'),
 
     ('batch_size'   ,   100),
-    ('epochs'       ,   5),
+    ('epochs'       ,   50),
     ('learning'     ,   0.001),
     
     ('norm_output'  ,   True), # If true, train on output [0,1]. Otherwise, train on regular output (e.g. log(M) in [14,15])
@@ -41,6 +41,7 @@ par = OrderedDict([
     ('validation'   ,   False), # Make a validation set from training data
     ('crossfold'    ,   True) # Use crossfold validation
 ])
+
 
 ## ML Model Declaration
 def baseline_model():
@@ -120,8 +121,8 @@ if par['norm_output']:
     Y -= Y_min
     Y /= (Y_max - Y_min)
 
-par['Y_max'] = Y_max
-par['Y_min'] = Y_min
+par['mass_max'] = Y_max
+par['mass_min'] = Y_min
 
 par['fold_max'] = fold.max()
 
@@ -234,7 +235,7 @@ if not os.path.isdir(model_dir):
     os.makedirs(model_dir)
 
 with open(os.path.join(model_dir, 'parameters.txt'), 'w') as param_file:
-    param_file.write('\n~~~ DATA,ML PARAMETERS ~~~ \n\n')
+    param_file.write('\n~~~ DATA, ML PARAMETERS ~~~ \n\n')
     for key in par.keys():
         param_file.write(key + ' : ' + str(par[key]) +'\n')
     
@@ -286,9 +287,9 @@ save_dict = {
     'sigv_regr' :   sigv_train,
     'sigv_test' :   sigv_test,
     
-    'y_train'   :   y_train,
-    'y_test'    :   y_test,
-    'y_pred'    :   y_pred
+    'mass_train'   :   y_train,
+    'mass_test'    :   y_test,
+    'mass_pred'    :   y_pred
 }
 
 np.save(os.path.join(save_dir, 'model_data', model_name_save + '.npy'), save_dict)

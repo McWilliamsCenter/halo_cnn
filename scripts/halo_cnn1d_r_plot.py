@@ -55,13 +55,13 @@ sdm_dat = matt.parseout(np.load(sdm_file))
 
 print('Plotting...')
 
-one_to_one = np.arange(11)*(par['Y_max'] - par['Y_min'])/10. + par['Y_min']
+one_to_one = np.arange(11)*(par['mass_max'] - par['mass_min'])/10. + par['mass_min']
 
 
 print('Power law predictions\n')
 
-y_regr = np.reshape(dat['y_train'], (len(dat['y_train']),1))
-y_regr_test = np.reshape(dat['y_test'], (len(dat['y_test']),1))
+y_regr = np.reshape(dat['mass_train'], (len(dat['mass_train']),1))
+y_regr_test = np.reshape(dat['mass_test'], (len(dat['mass_test']),1))
 
 
 regr = linear_model.LinearRegression(fit_intercept=True)
@@ -82,7 +82,7 @@ ax1 = f.add_subplot(gs[0,0])
 fit_y = one_to_one * regr.coef_ + regr.intercept_
 ax1.plot(one_to_one,fit_y,'r',label='fit')
 
-matt.binnedplot(dat['y_train'],
+matt.binnedplot(dat['mass_train'],
                  dat['sigv_regr'],
                  n=50,
                  percentiles = [35,47.5],
@@ -92,7 +92,7 @@ matt.binnedplot(dat['y_train'],
                  c='g',
                  log=0
                 )
-ax1.set_xlim(xmin=par['Y_min'], xmax=par['Y_max'])
+ax1.set_xlim(xmin=par['mass_min'], xmax=par['mass_max'])
 
 ax1.set_ylabel('$\log[\sigma_v]$', fontsize=14)
 ax1.legend(fontsize=8,loc=4)
@@ -100,7 +100,7 @@ ax1.legend(fontsize=8,loc=4)
 ax2 = f.add_subplot(gs[1,0],sharex=ax1)
                 
 ax2.plot(one_to_one,one_to_one,'k',linestyle='dashed')
-matt.binnedplot(dat['y_test'],
+matt.binnedplot(dat['mass_test'],
                  y_regr_pred,
                  n=75,
                  percentiles = [35],
@@ -136,7 +136,7 @@ matt.binnedplot(sdm_dat[:,1],
                 log=0
                )
 
-ax.set_xlim(xmin=par['Y_min'], xmax=par['Y_max'])
+ax.set_xlim(xmin=par['mass_min'], xmax=par['mass_max'])
 
 ax.set_xlabel('$\log[M$]', fontsize=14)
 ax.set_ylabel('$\log[M_{pred}$]', fontsize=14)
@@ -149,21 +149,19 @@ f.savefig(os.path.join(model_dir, save_model_name+ '_sdm.pdf'))
 
 print('Calculating mass error\n')
 
-pred_err = (10.**dat['y_pred'])/(10.**dat['y_test']) - 1.
-regr_err = (10.**y_regr_pred)/(10.**dat['y_test']) - 1.
+pred_err = (10.**dat['mass_pred'])/(10.**dat['mass_test']) - 1.
+regr_err = (10.**y_regr_pred)/(10.**dat['mass_test']) - 1.
 sdm_err = (10.**sdm_dat[:,0])/(10.**sdm_dat[:,1]) - 1.
 
 print('Plotting\n')
 
 f = plt.figure(figsize=[4.5,8])
 gs = mpl.gridspec.GridSpec(3,1,height_ratios=[3,2,1], hspace=0)
-# f, (ax1,ax2,ax3) = plt.subplots(3,1,sharex=True,figsize=[4,6],  gridspec_kw={'height_ratios': [3, 1, 1], 'hspace': 0 })
-# plt.scatter(y_test,y_pred, marker='.',alpha=0.5)
 
 ax1 = f.add_subplot(gs[0,0])
 ax1.plot(one_to_one,one_to_one, color='k', linestyle='dashed')
 
-matt.binnedplot( dat['y_test'], dat['y_pred'], n=50, 
+matt.binnedplot( dat['mass_test'], dat['mass_pred'], n=50, 
             percentiles=[34,47.5], median=True, ax=ax1, log=0
             )
 ax1.set_ylabel(r'$\log[M_{pred}$]',fontsize=14)
@@ -173,10 +171,10 @@ ax1.legend(fontsize=8,loc=2)
 ax2 = f.add_subplot(gs[1,0], sharex=ax1)
 ax2.plot(one_to_one,[0]*len(one_to_one), color='k', linestyle='dashed')
 
-matt.binnedplot(dat['y_test'],regr_err,n=25, percentiles=[34], median=True, ax=ax2, label='pow',c='r', errorbar=False, names=False, log=0)
+matt.binnedplot(dat['mass_test'],regr_err,n=25, percentiles=[34], median=True, ax=ax2, label='pow',c='r', errorbar=False, names=False, log=0)
 
 
-matt.binnedplot(dat['y_test'],pred_err,n=25, percentiles=[34], median=True, ax=ax2, label='cnn',c='b', errorbar=False, names=False, log=0)
+matt.binnedplot(dat['mass_test'],pred_err,n=25, percentiles=[34], median=True, ax=ax2, label='cnn',c='b', errorbar=False, names=False, log=0)
 
 matt.binnedplot(sdm_dat[:,1],sdm_err,n=25, percentiles=[34], median=True, ax=ax2, label='sdm',c='g', errorbar=False, names=False, log=0)
 
@@ -188,14 +186,14 @@ ax2.legend(fontsize=8)
 
 
 ax3 = f.add_subplot(gs[2,0], sharex=ax1)
-_ = matt.histplot(dat['y_train'], n=100, log=True, norm=True, label='train', ax=ax3)
-_ = matt.histplot(dat['y_test'], n=100, log=True, norm=True, label='test', ax=ax3)
+_ = matt.histplot(dat['mass_train'], n=100, log=True, norm=True, label='train', ax=ax3)
+_ = matt.histplot(dat['mass_test'], n=100, log=True, norm=True, label='test', ax=ax3)
 
 
 ax3.set_ylabel('pdf',fontsize=14)
 ax3.legend(fontsize=8, loc=3)
 
-ax1.set_xlim(xmin=par['Y_min'], xmax=par['Y_max'])
+ax1.set_xlim(xmin=par['mass_min'], xmax=par['mass_max'])
 
 plt.xlabel(r'$\log$[M]',fontsize=14)
 ax1.set_title('halo_cnn')

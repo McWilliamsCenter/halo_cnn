@@ -24,7 +24,7 @@ par = OrderedDict([
     ('model_name'   ,   'halo_cnn1d_r'),
     ('data_file'    ,   'UM_z=0.117_med_reduced.npy'),
     
-    ('subsample'    ,   0.1 ), # Fraction by which to randomly subsample data
+    ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
     ('shape'        ,   48), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     

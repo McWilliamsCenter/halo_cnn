@@ -10,7 +10,14 @@ mpl.rcParams['figure.facecolor'] = (1,1,1,1)
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
+
+
+# ~~~~~~~~~~~~ GENERAL PLOTTING ~~~~~~~~~~~~ 
+
 def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None):
+    """
+        Plots a nice histogram
+    """
     if n=='auto':
         n = len(X)/1000
         
@@ -53,6 +60,10 @@ def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None):
     return x,y
 
 def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='', ax = None, c='b', errorbar=False, names=True, log=0):
+    """
+        Plots a nice 2D distribution of points, binned along the x axis. 
+        Percentiles are shown along the y distribution.  
+    """
     
     if n=='auto':
         n = len(X)/1000
@@ -150,109 +161,12 @@ def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='',
 
     return x_incr,y_mean,y_median,y_percent, y_std
 
-def savefig(f, name, wdir, figsize=(3,3), xlabel='',ylabel='', title='', fontsize=11, tight = True):
-    
-    if figsize: f.set_size_inches(*figsize)
-    
-    if xlabel!='': plt.xlabel(xlabel, fontsize=fontsize)
-    if ylabel!='': plt.ylabel(ylabel, fontsize=fontsize)
-    if title!='': plt.title(title, fontsize=fontsize)
-    
-    if tight: plt.tight_layout()
-    
-    f.savefig(wdir+'images/'+name+'.pdf')
-    
-
-
-def get_vsig(dat):
-#     return np.array([np.sqrt(np.sum(dat[i]['vlos'][:dat[i]['Ngal']]**2)/dat[i]['Ngal'])
-#                  for i in range(len(dat))
-#                 ])
-    return np.array([np.std(dat[i]['vlos'][0:dat[i]['Ngal']])
-                     for i in range(len(dat))
-                    ])
-
-def get_rsig(dat):
-    return np.array([np.sqrt(np.sum(dat[i]['Rproj'][:dat[i]['Ngal']]**2)/dat[i]['Ngal'])
-                     for i in range(len(dat))
-                    ])
-    
-def add_vsig(dat):
-    vsig = get_vsig(dat)
-    
-    if 'vsig' in dat.dtype.names:
-        
-        dat['vsig'] = vsig
-        return dat
-    
-    return nprf.rec_append_fields(dat,'vsig',vsig,dtypes='<f4')
-
-def add_rsig(dat):
-    
-    rsig = get_rsig(dat)
-    
-    if 'rsig' in dat.dtype.names:
-        
-        dat['rsig'] = rsig
-        return dat
-    
-    return nprf.rec_append_fields(dat,'rsig',rsig,dtypes='<f4')
-
-def get_massv(dat):
-
-    numHalos = len(dat)
-    numTrain = np.sum(dat['intrain'] == True)
-    numTest = np.sum(dat['intest'] == True)
-
-    featuresList_train = []
-    massList_train = np.zeros(numTrain,'f')
-    vsigList_train = np.zeros(numTrain,'f')
-
-    featuresList_test = []
-    massList_test = np.zeros(numTest,'f')
-    vsigList_test = np.zeros(numTest,'f')
-
-    te = 0
-    tr=0
-
-    #loop through all of the halos
-    for h in range(numHalos):
-        if dat['Mtot'][h]==0:
-            print('zero!')
-            continue
-
-        numSubs = dat['Ngal'][h]
-        subfeat = np.zeros((numSubs, 2), 'f')
-        #loop through the subhalos/galaxies in this halo:
-        for sh in range (0, numSubs):
-            #and fill in each of the features
-            subfeat[sh][0] = np.abs(dat['vlos'][h][sh])
-            subfeat[sh][1] = 1.0
-
-        if (dat['intrain'][h]==True):
-            featuresList_train.append(subfeat)
-            massList_train[tr] = np.log10(dat['Mtot'][h])
-            vsigList_train[tr] = np.log10(np.std(dat['vlos'][h][0:numSubs]))
-            tr+=1
-
-        if (dat['intest'][h]==True):
-
-            featuresList_test.append(subfeat)
-            massList_test[te] = np.log10(dat['Mtot'][h])
-            vsigList_test[te] = np.log10(np.std(dat['vlos'][h][0:numSubs]))
-            te+=1
-            
-    return massList_train, vsigList_train, massList_test, vsigList_test
-
-def foldmassdist(dat):
-    nFolds = max(dat['fold'])+1
-    
-    for i in range(nFolds):
-        masses = dat['Mtot'][(dat['fold']==i) & (dat['intrain']==True)]
-        
-        histplot(np.log10(masses)+i, n=100, label='fold_'+str(i))
 
 def pdfs(dat, mbins=6, vbins = 20,  norm=False, label = '', ax = None, verbose=False):
+    """
+        Shows the average pdf of clusters at different mass bins. 
+    """
+
     if len(dat) == 0:
         return
     
@@ -294,31 +208,67 @@ def pdfs(dat, mbins=6, vbins = 20,  norm=False, label = '', ax = None, verbose=F
             for k in range(vbins):
                 histvals[k] += np.sum((clusv >= (vi+k*vinc)) & (clusv<(vi + (k+1)*vinc)) )*1./ngals[j]
         
-#         if norm: nvs = nvs/nvs.std()
-            
-#         if len(nvs)>0 :histplot(nvs,n=20,label="%.2f - %.2f" % (i,i + inc), log=False)
+
         ax.plot(
             vmin + 0.5*vinc + np.arange(vbins)*vinc,
             histvals/len(vs),
             label=label + "%.2f - %.2f" % (mi,mi + minc)
         )
+ 
+def foldmassdist(dat):
+    """
+        Shows the mass distribution of different folds.
+    """
+ 
+    nFolds = max(dat['fold'])+1
+    
+    for i in range(nFolds):
+        masses = dat['Mtot'][(dat['fold']==i) & (dat['intrain']==True)]
         
+        histplot(np.log10(masses)+i, n=100, label='fold_'+str(i))
 
+# ~~~~~~~~~~~~ SIGMA V, R ~~~~~~~~~~~~ 
+
+def get_vsig(dat):
+
+    return np.array([np.std(dat[i]['vlos'][0:dat[i]['Ngal']])
+                     for i in range(len(dat))
+                    ])
+
+def get_rsig(dat):
+    
+    return np.array([np.sqrt(np.sum(dat[i]['Rproj'][:dat[i]['Ngal']]**2)/dat[i]['Ngal']) for i in range(len(dat))])
+    
+def add_vsig(dat):
+    vsig = get_vsig(dat)
+    
+    if 'vsig' in dat.dtype.names:
         
-def kde_hist(clus, label=None):
-    vs = clus['vlos'][0:clus['Ngal']]
+        dat['vsig'] = vsig
+        return dat
     
-    kern = gaussian_kde(vs)
-    pos = vs.min() + ((vs.max() -vs.min())/(2.*len(vs))) * np.arange(2*len(vs))
-    y = kern(pos)
+    return nprf.rec_append_fields(dat,'vsig',vsig,dtypes='<f4')
 
-    print(np.log10(clus['Mtot']))
-    plt.plot(pos,y, label=label)
+def add_rsig(dat):
     
-    plt.xlabel(r'$v_{los}$')
-    plt.ylabel(r'$dn/dv_{los}$')
+    rsig = get_rsig(dat)
     
+    if 'rsig' in dat.dtype.names:
+        
+        dat['rsig'] = rsig
+        return dat
+    
+    return nprf.rec_append_fields(dat,'rsig',rsig,dtypes='<f4')
+
+
+   
+# ~~~~~~~~~~~~ SDM ~~~~~~~~~~~~ 
+
 def parseout(dat):
+    """
+        Parses prediction output from SDM
+    """
+
     preds = np.zeros((0,3),'f')
 
     for i in range(int(len(dat)/3)):
@@ -378,16 +328,3 @@ def plotallerror(dats):
         err = (dat[:,0]-dat[:,1])/dat[:,1]
         y = binnedplot(dat[:,1],err,50,percentiles=[50], mean=False,label=i)
 
-
-    
-# def ploterror(dat,title=''):
-#     err = (dat[:,0]-dat[:,1])/dat[:,1]
-    
-#     plt.plot(dat[:,1],[0]*len(dat),label='base')
-#     y = binnedplot(dat[:,1],err,100)
-
-#     plt.xlabel('True log[M200c]', fontsize=18)
-#     plt.ylabel('SDM Fractional Mass Error', fontsize=18)
-#     plt.title(title, fontsize=20)
-    
-#     return f
