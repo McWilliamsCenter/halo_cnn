@@ -35,9 +35,10 @@ subset_dir = os.path.join(save_dir, 'subsets')
 if not os.path.isdir(os.path.join(subset_dir)):
     os.makedirs(subset_dir)
 
+query_name =  'MDPL2_Rockstar_' + 'snap:' + str(snapnum) + '_v3'
 
 print('\n')
-print('~~~~~ Quering MDPL2 at snapnum = ' + str(snapnum) + ' ~~~~~\n')
+print('~~~~~ Quering' + query_name + '~~~~~\n')
 
 
 
@@ -46,7 +47,7 @@ CS = CosmoSim()
 CS.login(username="maho3", password="password")
 
 
-dx = 250
+dx = 200
 
 x_mins = np.arange(0,1000,dx)
 
@@ -54,24 +55,24 @@ table_names = [None]*len(x_mins)
 jobids = [None]*len(x_mins)
 
 
-def submit_query(i):
+def submit_query(i, cache=cache):
     xmin = x_mins[i]
     xmax = xmin + dx
     
-    sql_query = 'SELECT rockstarId, upId, M200b, Rvir, x, y, z, vx, vy, vz, '\
-                'M500c, Rs, Macc, Vacc, Mvir, M200c, scale '\
+    # old queries: descId, breadthFirstId, M200b,
+    
+    sql_query = 'SELECT rockstarId, upId, pId,  Mvir, Rvir, Rs, Macc, Vacc,  M500c, M200c, x, y, z, vx, vy, vz '\
                 'FROM MDPL2.Rockstar WHERE snapnum = '+str(snapnum)+\
                 ' and Macc > ' + Macc_min + \
-                ' and x >=' + str(xmin) + ' and x<' + str(xmax)
+                ' and x >=' + str(xmin) + ' and x<' + str(xmax) +''
     
-    table_names[i] =    'MDPL2_Rockstar_' + 'snap:' + str(snapnum) + \
-                        '_x:[' + str(xmin) + ',' + str(xmax) + ']'
+    table_names[i] =    query_name + '_x:[' + str(xmin) + ',' + str(xmax) + ']'
     
     
     print('Querying: ' + table_names[i])
     
     jobid = CS.run_sql_query(   query_string=sql_query, 
-                                tablename=table_names[i],
+                                tablename=table_names[i] + '_',
                                 queue = 'long',
                                 cache = cache)
     jobids[i] = jobid
@@ -97,28 +98,36 @@ while ((np.sum(completed) < len(x_mins)) and (t <= 30)): # set timeout at 30 min
     
         if completed[i]: continue
         
+        out_file = os.path.join(subset_dir, 
+                                table_names[i] + '.csv')
+        if os.path.isfile(out_file):
+            print('Subset already downloaded.\n')
+            completed[i] = True
+            continue
+                
+        time.sleep(1.)
+        
         print('Checking status of: ' + table_names[i])
         status = CS.check_job_status(jobid=jobids[i])
         
+        print(status)
+        
         if status=='COMPLETED':
-            out_file = os.path.join(subset_dir, 
-                                    table_names[i] + '_' + jobids[i] + '.csv')
 
-            if os.path.isfile(out_file):
-                print('Subset already downloaded.')
-            else:
-                CS.download(jobid=jobids[i],
-                            filename = out_file,
-                            format='csv',
-                            cache=cache)
+            CS.download(jobid=jobids[i],
+                        filename = out_file,
+                        format='csv',
+                        cache=cache)
   
             completed[i] = True
                         
         elif status in ['EXECUTING','QUEUED']:
-            print(status + '\n')
+            pass
+        elif status in ['ARCHIVED']:
+            print('Resubmitting...')
             
+            submit_query(i, False)
         else:
-            print(status)
             CS.general_job_info(jobid=jobids[i], output=True)
             CS.delete_job(jobid=jobids[i])
             
@@ -126,36 +135,37 @@ while ((np.sum(completed) < len(x_mins)) and (t <= 30)): # set timeout at 30 min
             
             submit_query(i)
     
-    print('Waiting 10sec...')
-    time.sleep(10.)
-    t += 0.1
+    print('Waiting 5sec...')
+    time.sleep(5.)
+    t += 0.05
 
 if (np.sum(completed) == len(x_mins)):
     print('Successfully executed all data subsets')
 else:
     raise Exception('Timeout.')
 
-"""
-print('deleting jobs...')
-for i in range(len(x_mins)):
-    time.sleep(1.)
-    CS.delete_job(jobid=jobids[i])"""
-
 
 CS.logout()
 
-# CS.delete_all_jobs(phase=['ERROR','ABORTED'])
-
     
 ## COMBINE SUBSETS
-print ('TBD')
-"""
+print ('\nCOMBINING SUBSETS')
+
 out_dat = None
 
 for i in range(len(x_mins)):
 
     out_file = os.path.join(subset_dir, table_names[i]  + '.csv')
     
+    print('Loading ' + table_names[i] + ' ...')
+    
     if i==0:
-        out_dat = 
-"""
+        out_dat = pd.read_csv(out_file)
+    else:
+        out_dat = out_dat.append(pd.read_csv(out_file))
+    
+out_file = os.path.join(save_dir,
+                        query_name + '.csv')
+print('Saving to ' + out_file)
+out_dat.to_csv(out_file)
+    
