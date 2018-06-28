@@ -14,7 +14,7 @@ from scipy.stats import gaussian_kde
 
 # ~~~~~~~~~~~~ GENERAL PLOTTING ~~~~~~~~~~~~ 
 
-def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None):
+def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None, func= lambda x: x):
     """
         Plots a nice histogram
     """
@@ -37,6 +37,7 @@ def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None):
         if xcount==0: continue
             
         if box: xbin = xcount/(increment*1000**3) # N to n=N/V = N/((1000 Mpc/h)^3)
+        if func: xbin = func(xbin)
         else:
             xbin = xcount
         

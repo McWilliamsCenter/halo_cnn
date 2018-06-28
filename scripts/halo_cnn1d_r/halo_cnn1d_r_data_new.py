@@ -30,7 +30,7 @@ par = OrderedDict([
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
-    ('shape'        ,   (48)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
+    ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
 
 ])
 
@@ -41,75 +41,29 @@ par = OrderedDict([
 print('\n~~~~~ LOADING DATA ~~~~~')
 # Load and organize
 
-raw_path = os.path.join(par['wdir'], par['in_folder'])
+in_path = os.path.join(par['wdir'], par['in_folder'], par['data_file'])
 
-print('\nData file: ' + par['data_file'] + '\n')
-
-dat_orig = np.load(os.path.join(raw_path, par['data_file']))
-print('Raw data size: ' + str(sys.getsizeof(dat_orig)/10.**9) + ' GB\n')
+cat = Catalog().load(in_path)
 
 # Subsample
 print('\n~~~~~ SUBSAMPLING ~~~~~')
     
-print('Original data length: ' + str(len(dat_orig)))
-dat = np.random.choice( dat_orig, 
-                        int(par['subsample']* len(dat_orig)),
-                        replace = False)    
-print('New data length: ' + str(len(dat)))
-
-
-# Reassign train datapoints to an even cluster mass distribution
-if par['new_train']:
-    print('\nREASSIGN TRAINING DATA')
-
-    intrvl = 0.01
-    num_train = 4000
-
-    dat['intrain']=0
-
-    logM = np.log10(dat['Mtot'])
-
-    kde = gaussian_kde(logM) # get a probability distribution for logM
-
-    sample = np.arange(logM.min(),
-                       logM.max(),
-                       intrvl
+print('Data length: ' + str(len(cat)))
+ind = np.random.choice(range(len(pure_cat)), 
+                       int(par['subsample']*len(pure_cat)),
+                       replace=False
                       )
-    pdf = kde(sample)
-    pdf /= pdf.sum()
-    
-    pdf = 1./pdf # invert it
-    pdf /= pdf.sum()
 
-    # sample pdf at each datapoint
-    p = np.ndarray(shape=len(logM))
+cat.prop = cat.prop.iloc[ind]
+cat.gal = cat.gal[ind]
 
-    for i in range(len(logM)):
-        p[i] = pdf[int((logM[i] - logM.min())/intrvl)] 
-
-    p/=p.sum()
-
-
-    new_logM_indices = np.random.choice(np.arange(len(logM)), num_train, replace=False, p=p) # use the probabilities to choose an even mass profile
-    
-    
-    dat['intrain'][new_logM_indices]=1
-
+print('Subsampled data length: ' + str(len(cat)))
 
 
 
 print('\n~~~~~ DATA CHARACTERISTICS ~~~~~')
-print('data shape: ' + str(dat.shape))
 
-vmax = dat['vlos'].max()
-rmax = dat['Rproj'].max()
-
-par['vmax'] = vmax
-par['rmax'] = rmax
-
-print('vmax: ' + str(vmax))
-print('rmax: ' + str(rmax))
-
+print(cat.par)
 
 
 

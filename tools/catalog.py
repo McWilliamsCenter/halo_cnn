@@ -20,7 +20,7 @@ class Catalog:
         return len(self.prop)
     
     def __init__(self, par=None, prop=None, gal=None):
-        self.par = par
+        self.par = par # Parameters of mock catalog
         self.prop = prop # Properties of host clusters. (# clusters) x (# of properties)
         self.gal = gal # Cluster members. Position, velocities, etc.
     
@@ -35,3 +35,5 @@ class Catalog:
         self.par = new_cat.par
         self.prop = new_cat.prop
         self.gal = new_cat.gal
+        
+        return self
