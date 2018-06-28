@@ -15,20 +15,22 @@ import matplotlib.pyplot as plt
 ## FUNCTIONS
 
 import tools.matt_tools as matt
+from tools.catalog import Cluster, Catalog
 
 
 ## DATA PARAMETERS
 par = OrderedDict([
-
-    ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn1d_r'),
-    ('data_file'    ,   'UM_z=0.117_med_reduced.npy'),
+
+    ('wdir'         ,   '/home/mho1/scratch/halo_cnn'),
+    ('in_folder'    ,   'data_mocks')
+    ('out_folder'   ,   'data_processed')
+    
+    ('data_file'    ,   'Rockstar_UM_z=0.117_contam.p'),
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
-    ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
-    
-    ('new_train'    ,   False) # Reassign training data to have a flat mass distribution. For use for training with one fold
+    ('shape'        ,   (48)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
 
 ])
 
@@ -39,7 +41,7 @@ par = OrderedDict([
 print('\n~~~~~ LOADING DATA ~~~~~')
 # Load and organize
 
-raw_path = os.path.join(par['wdir'], 'data_mocks')
+raw_path = os.path.join(par['wdir'], par['in_folder'])
 
 print('\nData file: ' + par['data_file'] + '\n')
 

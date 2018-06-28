@@ -4,7 +4,7 @@ interact --ntasks-per-node=28 -t 08:00:00
 module load anaconda3/5.1.0
 source activate jupy
 cd halo_cnn/
-python ./catalog/make_catalog.py
+python ./mocks/make_mocks.py
 """
 
 
@@ -27,7 +27,7 @@ from tools.catalog import Cluster, Catalog
 
 ## ~~~~~~ PARAMETERS ~~~~~~
 par = OrderedDict([ 
-    ('catalog_name' ,   'Rockstar_UM_z=0.117'),
+    ('catalog_name' ,   'Rockstar_UM_z=0.117_v1'),
     
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn'),
     ('in_folder'    ,   'data_raw'),
@@ -42,6 +42,7 @@ par = OrderedDict([
     ('min_richness' ,   10),
     
     ('cut_size'     ,   'large'),
+    ('rotations'    ,   10),
     
     ('cosmo' ,   {'H_0': 100, # [km/s/(Mpc/h)]
                   'Omega_m': 0.307115,
@@ -49,8 +50,14 @@ par = OrderedDict([
                   'c': 299792.458 # [km/s]
                  })
     ])
-
+    
+## For debugging
 debug = False
+
+if debug:
+    print('\n>>>>>DEBUGGING<<<<<')
+    par['min_richness']=2
+    
 ## ~~~~~ PARAMETER HANDLING ~~~~~
 
 print('\n~~~~~ GENERATING ' + par['catalog_name'] + ' ~~~~~~')
@@ -168,25 +175,16 @@ print('gal_data length: ' + str(len(gal_data)))
 
 ## Iterate through galaxies, find true_members and pad gal_data
 
-host_members= defaultdict(lambda:[]) # Relates host rockstarid to indices of member galaxies
-
+## ~~~~~ FIND TRUE MEMBERS ~~~~~~
 print('\nAssigning true members...')
+
+host_members= defaultdict(lambda:[]) # Relates host rockstarid to indices of member galaxies
 
 for i in range(len(gal_data)):
     if i%(10**5)==0 :print(str(int(i/(10**5))) + ' / ' + str(int(len(gal_data)/(10**5))))
     # Assign to host
 
     host_members[gal_data.loc[i,'upid']].append(i)
-
-print('\nReducing dataset...')
-
-host_drop = ['row_id','upId','pId','descId','breadthFirstId','scale']
-gal_drop = []
-
-host_data = host_data[[i for i in host_data.columns.values if i not in host_drop]]
-gal_data = gal_data[[i for i in gal_data.columns.values if i not in gal_drop]]
-
-
 
 ## ~~~~~ PADDING DATA ~~~~~~
 """
@@ -198,8 +196,14 @@ I did this to automate the padding process and make it O(n)
 """
 
 print('\nDetermining padding regions...')
-pad_size = 1.05*(vcut + np.sqrt(gal_data['vx']**2 + gal_data['vy']**2 + gal_data['vz']**2).max())/100.# CHECK THIS
+max_gal_v = np.sqrt((gal_data['vx']**2 + gal_data['vy']**2 +gal_data['vz']**2).max())
+max_clu_v = np.sqrt((host_data['vx']**2 + host_data['vy']**2 + host_data['vz']**2).max())
+
+pad_size = 1.0*(vcut + max_gal_v + max_clu_v) / H_from_z(par['z'], cosmo) # max possible distance in the non-relativistic case
+
 box_length = 1000
+
+print('pad_size/box_length: ' + str(pad_size/box_length))
 
 pad_regions = []
 pad_directions = (None, False, True)
@@ -256,36 +260,68 @@ for i in range(len(pad_regions)):
 
 num_padded = np.sum([len(to_pad_ind[i]) for i in range(len(to_pad_ind))])
 
-pad_gal_data = pd.DataFrame(np.zeros(shape=(num_padded, gal_data.shape[1])), columns = gal_data.columns)
+c = len(gal_data)
+
+gal_data = gal_data.append(pd.DataFrame(np.zeros(shape=(num_padded, gal_data.shape[1])), columns = gal_data.columns), ignore_index=True)
+
+pad_gal_copies = defaultdict(lambda:[]) # dictionary which relates indices of original galaxies to their padded copy indices
 
 print('\nPadding...')
-c = 0
 for i in range(len(pad_regions)):
     print(str(i + 1) + ' / ' + str(len(pad_regions)))
     
     c_end = c + len(to_pad_ind[i])
-    pad_gal_data.values[c : c_end,:] = gal_data.iloc[to_pad_ind[i]].values
+    gal_data.values[c : c_end,:] = gal_data.iloc[to_pad_ind[i]].values
+    
+    for j in range(len(to_pad_ind[i])):
+        pad_gal_copies[to_pad_ind[i][j]].append(c+j)
         
     for j in range(len(pad_regions[i])):
         if pad_regions[i][j]==True:
-             pad_gal_data.loc[c : c_end, axes[j]] += box_length
+             gal_data.loc[c : c_end-1, axes[j]] += box_length
         elif pad_regions[i][j]==False:
-             pad_gal_data.loc[c : c_end, axes[j]] -= box_length
+             gal_data.loc[c : c_end-1, axes[j]] -= box_length
         
     c = c_end
 
-gal_data = gal_data.append(pad_gal_data, ignore_index=True)
+# gal_data = gal_data.append(pad_gal_data, ignore_index=True)
 
 print('Padded gal_data length: ' + str(len(gal_data)))
 
 # gal_data is now padded.
 
+print('\nReassigning true members to account for padding...')
+for i in range(len(host_data)):
+    if i%(10**4)==0 :print(str(int(i/(10**4))) + ' / ' + str(int(len(host_data)/(10**4) )))
+    
+    host_rId = host_data.at[i, 'rockstarId']
+    host_rad = host_data.at[i, 'Rvir']/1000.
+    host_pos = host_data.iloc[i][['x','y','z']]
+    
+    for j in range(len(host_members[host_rId])):
+        true_memb_dist = np.sqrt(np.sum((gal_data.iloc[host_members[host_rId][j]][['x','y','z']] - host_pos)**2))
+        if true_memb_dist > host_rad:
+            if host_members[host_rId][j] in pad_gal_copies:
+                close_gal = np.sqrt(np.sum( (gal_data.iloc[ pad_gal_copies[host_members[host_rId][j]] ][['x','y','z']] - host_pos)**2, axis=1)).idxmin()
+                
+                if np.sqrt(np.sum((gal_data.iloc[close_gal][['x','y','z']] - host_pos)**2)) < true_memb_dist:
+                    if debug: print(close_gal)
+                    host_members[host_rId][j] = close_gal
+        
+
+print('\nReducing dataset...')
+
+host_drop = ['row_id','upId','pId','descId','breadthFirstId','scale']
+gal_drop = []
+
+host_data = host_data[[i for i in host_data.columns.values if i not in host_drop]]
+gal_data = gal_data[[i for i in gal_data.columns.values if i not in gal_drop]]
+
 
 ## ~~~~~ CALCULATING ROTATED MOCK OBSERVATIONS ~~~~~~
-def rot_matrix_rand(seed=124987):
-    np.random.seed(seed)
-    
-    th_x, th_y, th_z = 2*np.pi*np.random.random(3)
+def rot_matrix_rand( angles = None):
+
+    th_x, th_y, th_z = 2*np.pi*np.random.random(3) if angles is None else angles
     
     print('\nAngles: ' + str((th_x,th_y,th_z)))
 
@@ -307,10 +343,13 @@ def rot_matrix_rand(seed=124987):
     
     return R
 
-def cut_mock(rot_seed=89847):
+def cut_mock( angles = None ):
+    """
+    Rotate catalog. Iterate through clusters. Cut a long cylinder through the entire sim around projected cluster center. I'll call these pillars. Calculate all vlos. Create pure, contaminated catalogs. 
+    """
     # print('\nRotating Box')
-
-    R = rot_matrix_rand(seed=rot_seed)
+    
+    R = rot_matrix_rand(angles=angles)
 
     gal_pos = pd.DataFrame(np.matmul(gal_data[['x','y','z']].values, R.T),
                            columns=['x','y','z'])
@@ -325,13 +364,12 @@ def cut_mock(rot_seed=89847):
     # print('\nInitializing KDTree...')
     gal_tree = KDTree(gal_pos[['x','y']], leafsize=50)
 
-    """
-    Iterate through clusters. Cut cylinder through whole sim. Calculate all vlos. Create pure, contaminated catalogs. [TO-DO]
-    cut a long cylinder through the entire sim around projected cluster center. I'll call these pillars.
-    """
+
     # print('Sampling KDTree...')
     pillar_ind = gal_tree.query_ball_point(host_pos[['x','y']], aperture)
-
+    
+    
+    # Initialize catalogs
     pure_catalog = Catalog(prop = host_data,
                            gal = []
                           )
@@ -341,9 +379,9 @@ def cut_mock(rot_seed=89847):
     pure_ind = []
     contam_ind = []
 
-    gal_dtype = [ ('x_proj','<f4'),
-                  ('y_proj','<f4'),
-                  ('v_los', '<f4'),
+    gal_dtype = [ ('xproj','<f4'),
+                  ('yproj','<f4'),
+                  ('vlos', '<f4'),
                   ('true_memb','<i4'),
                   ('mvir','<f4')
                 ]
@@ -372,9 +410,9 @@ def cut_mock(rot_seed=89847):
                                 
             obs_members_index = obs_members_v_rel.index.to_series()
             
-            clu_gals['x_proj'] = gal_pos['x'].loc[obs_members_index] - host_pos.iloc[i]['x']
-            clu_gals['y_proj'] = gal_pos['y'].loc[obs_members_index] - host_pos.iloc[i]['y']
-            clu_gals['v_los'] = obs_members_v_rel
+            clu_gals['xproj'] = gal_pos['x'].loc[obs_members_index] - host_pos.iloc[i]['x']
+            clu_gals['yproj'] = gal_pos['y'].loc[obs_members_index] - host_pos.iloc[i]['y']
+            clu_gals['vlos'] = obs_members_v_rel
             clu_gals['true_memb'] = [x in true_members
                                      for x in obs_members_index
                                     ]
@@ -400,9 +438,9 @@ def cut_mock(rot_seed=89847):
             clu_gals = np.zeros(shape=(len(true_members)),
                                 dtype = gal_dtype)
             
-            clu_gals['x_proj'] = gal_pos['x'].iloc[true_members] - host_pos.iloc[i]['x']
-            clu_gals['y_proj'] = gal_pos['y'].iloc[true_members] - host_pos.iloc[i]['y']
-            clu_gals['v_los'] = v_rel.loc[gal_index.iloc[true_members]]
+            clu_gals['xproj'] = gal_pos['x'].iloc[true_members] - host_pos.iloc[i]['x']
+            clu_gals['yproj'] = gal_pos['y'].iloc[true_members] - host_pos.iloc[i]['y']
+            clu_gals['vlos'] = v_rel.loc[gal_index.iloc[true_members]]
             clu_gals['true_memb'] = True
             clu_gals['mvir'] = gal_data['mvir'].loc[true_members]
             
@@ -421,10 +459,19 @@ def cut_mock(rot_seed=89847):
 
 print('\nCutting cylinders...')
 
+angle_list = [(0,0,0), (np.pi/2,0,0), (0, np.pi/2, 0)] # Start with 3 orthogonal projections
+
+if par['rotations'] > len(angle_list):
+    # add more as necessary
+    angle_list += list(2*np.pi*np.random.rand(par['rotations']-len(angle_list),3)) 
+else:
+    # or remove some
+    angle_list = angle_list[0:par['rotations']]
+
 with mp.Pool(processes=13) as pool:
     catalogs = pool.map(cut_mock, 
-                        np.random.randint(0,10**5,10)
-                       )
+                        angle_list)
+                        
 print('Done.')
 
 pure_len = 0
@@ -439,16 +486,36 @@ for i in range(len(catalogs)):
     contam_len += len(catalogs[i][1].prop)
 
 print('\nCombining rotation catalogs...')
-pure_catalog = Catalog(prop = pd.DataFrame( np.zeros(shape=(pure_len, host_data.shape[1]+1)),
-                                            columns = np.append(host_data.columns.values,'rotation')
+
+# Initialize catalogs
+
+cat_par = OrderedDict([
+    ('catalog_name' ,   par['catalog_name']),
+    
+    ('z'            ,   par['z']),
+    
+    ('min_mass'     ,   par['min_mass']),
+    ('min_richness' ,   par['min_richness']),
+    
+    ('aperture'    ,   aperture),
+    ('vcut'         ,   vcut),
+    
+    ('cosmo'        ,   cosmo)
+])
+
+pure_catalog = Catalog(par = cat_par,
+                       prop = pd.DataFrame(np.zeros(shape=(pure_len, catalogs[0][0].prop.shape[1]+1)),
+                                           columns = np.append(host_data.columns.values,'rotation')
                                           ),
                        gal = [None]*pure_len
                       )
-contam_catalog = Catalog(prop = pd.DataFrame( np.zeros(shape=(contam_len, host_data.shape[1]+1)),
-                                            columns = np.append(host_data.columns.values,'rotation')
-                                          ),
-                       gal = [None]*contam_len
-                      )
+                      
+contam_catalog = Catalog(par = cat_par,
+                         prop = pd.DataFrame(np.zeros(shape=(contam_len, catalogs[0][1].prop.shape[1]+1)),
+                                             columns = np.append(catalogs[0][1].prop.columns.values,'rotation')
+                                            ),
+                         gal = [None]*contam_len
+                        )
 pure_c = 0
 contam_c = 0
 
@@ -469,16 +536,28 @@ for i in range(len(catalogs)):
     pure_c = pure_c_end
     contam_c = contam_c_end
     
+    
+# ~~~~~ STATS ~~~~~~
+print('Calculating additional statistics...')
+
+#Ngal
+pure_catalog.prop['Ngal'] = [len(x) for x in pure_catalog.gal]
+contam_catalog.prop['Ngal'] = [len(x) for x in contam_catalog.gal]
+
+#sigv
+pure_catalog.prop['sigv'] = [np.std(x['vlos']) for x in pure_catalog.gal]
+contam_catalog.prop['sigv'] = [np.std(x['vlos']) for x in contam_catalog.gal]
+
 
 ## ~~~~~ SAVE DATA ~~~~~~
-
-print('Saving...')
-pure_catalog.save(os.path.join(par['wdir'], 
-                               par['out_folder'], 
-                               par['catalog_name'] + '_pure.p'))
-contam_catalog.save(os.path.join(par['wdir'], 
-                                 par['out_folder'], 
-                                 par['catalog_name'] + '_contam.p'))
+if ~debug:
+    print('Saving...')
+    pure_catalog.save(os.path.join(par['wdir'], 
+                                   par['out_folder'], 
+                                   par['catalog_name'] + '_pure.p'))
+    contam_catalog.save(os.path.join(par['wdir'], 
+                                     par['out_folder'], 
+                                     par['catalog_name'] + '_contam.p'))
 
 
 print('\nAll done!')

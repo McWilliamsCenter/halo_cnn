@@ -19,7 +19,8 @@ class Catalog:
     def __len__(self):
         return len(self.prop)
     
-    def __init__(self, prop=None, gal=None):
+    def __init__(self, par=None, prop=None, gal=None):
+        self.par = par
         self.prop = prop # Properties of host clusters. (# clusters) x (# of properties)
         self.gal = gal # Cluster members. Position, velocities, etc.
     
@@ -27,8 +28,10 @@ class Catalog:
         with open(filename, 'wb') as out_file:
             pickle.dump(self, out_file)
     def load(self, filename):
+        print('Loading catalog from: ' + filename)
         with open(filename, 'rb') as in_file:
             new_cat = pickle.load(in_file)
         
+        self.par = new_cat.par
         self.prop = new_cat.prop
         self.gal = new_cat.gal
