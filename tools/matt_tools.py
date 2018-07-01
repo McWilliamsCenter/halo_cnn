@@ -36,10 +36,12 @@ def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None, func= l
         
         if xcount==0: continue
             
-        if box: xbin = xcount/(increment*1000**3) # N to n=N/V = N/((1000 Mpc/h)^3)
-        if func: xbin = func(xbin)
+        if box: 
+            xbin = xcount/(increment*1000**3) # N to n=N/V = N/((1000 Mpc/h)^3)
         else:
             xbin = xcount
+            
+        if func: xbin = func(xbin)
         
         x.append(i-increment/2)
         y.append(xbin)

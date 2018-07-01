@@ -2,7 +2,7 @@
 
 cd /home/mho1/halo_cnn/query
 
-module load anaconda2/5.1.0
+module load anaconda3
 
 source activate astroq
 

@@ -10,6 +10,8 @@ import pandas as pd
 from astroquery.cosmosim import CosmoSim
 
 """
+TO-DO: Make this a python module for easier handling. Application in Jupyter notebook.
+
 # General Strategy
 1. Submit queries
 2. Check for completion, resubmit if error
@@ -38,7 +40,7 @@ if not os.path.isdir(os.path.join(subset_dir)):
 query_name =  'MDPL2_Rockstar_' + 'snap:' + str(snapnum) + '_v3'
 
 print('\n')
-print('~~~~~ Quering' + query_name + '~~~~~\n')
+print('~~~~~ Quering ' + query_name + '~~~~~\n')
 
 
 
@@ -70,7 +72,7 @@ def submit_query(i, cache=cache):
     
     
     print('Querying: ' + table_names[i])
-    
+
     jobid = CS.run_sql_query(   query_string=sql_query, 
                                 tablename=table_names[i] + '_',
                                 queue = 'long',
@@ -84,7 +86,8 @@ for i in range(len(x_mins)):
     submit_query(i)
     time.sleep(1.)
     
-    
+# jobids = ['1530314084338316129','1530314089939852270','1530314095439811024','1530314101335877394','1530314106876914667']
+
     
 ## CHECK QUERIES, SAVE DATA, RESUBMIT QUERIES AS NECESSARY
 t = 0.
@@ -163,9 +166,12 @@ for i in range(len(x_mins)):
         out_dat = pd.read_csv(out_file)
     else:
         out_dat = out_dat.append(pd.read_csv(out_file))
+        
+out_dat = out_dat.reset_index(drop=True)
     
 out_file = os.path.join(save_dir,
                         query_name + '.csv')
 print('Saving to ' + out_file)
 out_dat.to_csv(out_file)
-    
+
+

@@ -5,6 +5,27 @@ module load anaconda3/5.1.0
 source activate jupy
 cd halo_cnn/
 python ./mocks/make_mocks.py
+
+
+This code is used to generate a mock catalog from MDPL2 Rockstar data. The main procedures of this script are
+    1. Load and organize all raw data and mock observation parameters. Seperate the data into 'host' information and 'galaxy' information.
+    
+    2. Iterate through all galaxies and assign them to their hosts. Galaxies which are gravitationally bound to their hosts are designated as the 'true members' of that host.
+    
+    3. Pad the galaxy data by creating copies of the galaxies which are near edges of the box. Keep track of the galaxies and their respective copies.
+    
+    4. Reassign true members to hosts which are close to the edges of the box. The padded galaxies might be closer to the host center than the originals.
+    
+    5. Cut cylinders
+        a. Rotate the box randomly. All x,y,z and vx,vy,vz data of hosts and galaxies will be multiplied by a rotation matrix R. The following steps will run in parallel for each rotated box.
+        b. Initialize a kd-tree along the (rotated) x,y positions of galaxies.
+        c. Iterate through all hosts and identify all galaxies within [aperature] of the host center along x,y positions.
+        d. For each of these galaxies, calculate relative LOS velocity to the cluster.
+        e. Cut off relative velocity of the members by v_cut. The galaxies which fall within the velocity cut are part of the contaminated catalog.
+        f. Calculate relative LOS velocity for all true members of the host. These galaxies are part of the pure catalog.
+        
+    6. Organize output and save data
+
 """
 
 
@@ -27,13 +48,13 @@ from tools.catalog import Cluster, Catalog
 
 ## ~~~~~~ PARAMETERS ~~~~~~
 par = OrderedDict([ 
-    ('catalog_name' ,   'Rockstar_UM_z=0.117_v1'),
+    ('catalog_name' ,   'Rockstar_UM_z=0.117'),
     
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn'),
     ('in_folder'    ,   'data_raw'),
     ('out_folder'   ,   'data_mocks'),
     
-    ('host_file'    ,   'MDPL2_Rockstar_snap:120.csv'),
+    ('host_file'    ,   'MDPL2_Rockstar_snap:120_v3.csv'),
     ('gal_file'     ,   'sfr_catalog_0.895100.npy'),
     
     ('z'            ,   0.117),
@@ -82,6 +103,8 @@ else:
     raise Exception('Invalid cut_size')
 
 
+
+
 ## ~~~~~~ UTILITY ~~~~~~
 def load_raw(filename):
     print('Loading data from: ' + filename)
@@ -95,38 +118,58 @@ def load_raw(filename):
         
 ## ~~~~~ COSMOLOGY FUNCTIONS ~~~~~~
 def H_from_z(z, cosmo):
+    # H(z): Hubble parameter from redshift
     H = cosmo['H_0'] * (cosmo['Omega_m']*(1 + z)**3 + cosmo['Omega_l'])**0.5
     return H
 
 def d_from_z(z, cosmo):
+    # d(z): Comoving distance from redshift
     d = integrate.quad(lambda x: cosmo['c']/H_from_z(x, cosmo), 0, z)
     return d[0]
+    
+"""
+Since d(z) has no simple, analytic form, but is smooth and continuous, we will sample it at many z and use numpy's interpolation function to reduce calculation time.
+"""
 
 z_samp = np.arange(0,5,0.0001)
 d_samp = [d_from_z(i, cosmo) for i in z_samp]
 
 def d_from_z_nump(z):
+    # d(z) interpolation: Comoving distance from redshift
     d_nump = np.interp(z, z_samp, d_samp)
     return d_nump
+    
 def z_from_d_nump(d):
+    # z(d) interpolation: Redshift from comoving distance
     z_nump = np.interp(d, d_samp, z_samp)
     return z_nump
 
 def vH_from_z(z, cosmo):
+    # v_H(z): Hubble recession velocity from redshift
     vH = cosmo['c']*((1+z)**2 - 1)/((1+z)**2 + 1)
     return vH
 
 def add_v(v1, v2, cosmo):
+    # Add velocities relativistically
     v_sum = (v1 + v2)/(1 + v1*v2/cosmo['c']**2)
     return v_sum
+    
 def sub_v(v1, v2, cosmo):
+    # Subtract velocities relativistically
     v_diff = (v1 - v2)/(1 - v1*v2/cosmo['c']**2)
     return v_diff
 
+"""
+We'll assume that each host (cluster) is centered at z=par['z']. Therefore, comoving distances and Hubble recession velocities of the hosts are constant.
+"""
 d_clu = d_from_z(par['z'], cosmo)
 vH_clu = vH_from_z(par['z'], cosmo)
 
 def cal_v_rel(host_pos, host_v, gal_pos, gal_v, cosmo):
+    """
+    Given host positions, velocities and galaxy position, velocities, calculate relative velocities. See Hy's notes.
+    """
+
     dist_gal_clu = gal_pos-host_pos
 
     d_gal = d_clu + dist_gal_clu
@@ -173,7 +216,8 @@ gal_data = gal_data.reset_index(drop=True)
 print('host_data length: ' + str(len(host_data)))
 print('gal_data length: ' + str(len(gal_data)))
 
-## Iterate through galaxies, find true_members and pad gal_data
+
+
 
 ## ~~~~~ FIND TRUE MEMBERS ~~~~~~
 print('\nAssigning true members...')
@@ -186,11 +230,14 @@ for i in range(len(gal_data)):
 
     host_members[gal_data.loc[i,'upid']].append(i)
 
+
+
+
 ## ~~~~~ PADDING DATA ~~~~~~
 """
 to_pad is a dictionary which relates tuples to an array of galaxy indices. The tuples have length 3 and correspond to the x,y,z axes, respectively. 
 
-For a given axis n, if the tuple value is 'True', the galaxies within the related array will have their 'n'-axis added one box_length when padding. If the tuple value is 'False', the galaxies within the related array will have their 'n'-axis subtracted one box_length when padding. If 'None' appears, the 'n'-axis is left alone while padding.
+For a given axis n, if the value within the tuple is 'True', the galaxies within the related array will have their 'n'-axis added one box_length when padding. If the tuple value is 'False', the galaxies within the related array will have their 'n'-axis subtracted one box_length when padding. If 'None' appears, the 'n'-axis is left alone while padding.
 
 I did this to automate the padding process and make it O(n)
 """
@@ -218,7 +265,7 @@ _ = pad_regions.remove((None,None,None))
 axes = ('x','y','z')
 
 def in_pad_region(key):
-    # Assign to padding regions
+    # Assign to padding regions. To be used in multiprocessing
     p_region = []
     
     for i in range(len(gal_data)):
@@ -237,12 +284,10 @@ def in_pad_region(key):
         if in_region:
             p_region.append(i)
             
-    # print(key, len(p_region))
-            
     return p_region
 
 with mp.Pool(processes=13) as pool:
-    to_pad_ind = pool.map(in_pad_region, pad_regions)
+    to_pad_ind = pool.map(in_pad_region, pad_regions) # each process checks a different padding region
 
 print('Padding regions: ')
 for i in range(len(pad_regions)):
@@ -290,6 +335,12 @@ print('Padded gal_data length: ' + str(len(gal_data)))
 
 # gal_data is now padded.
 
+
+## ~~~~~ REASSIGNING TRUE MEMBERs ~~~~~~
+"""
+Host-galaxy relationships might take place over a periodic boundary. Therefore, we must check if any padded copies of galaxies are closer to their respective hosts than the original galaxies
+"""
+
 print('\nReassigning true members to account for padding...')
 for i in range(len(host_data)):
     if i%(10**4)==0 :print(str(int(i/(10**4))) + ' / ' + str(int(len(host_data)/(10**4) )))
@@ -305,11 +356,10 @@ for i in range(len(host_data)):
                 close_gal = np.sqrt(np.sum( (gal_data.iloc[ pad_gal_copies[host_members[host_rId][j]] ][['x','y','z']] - host_pos)**2, axis=1)).idxmin()
                 
                 if np.sqrt(np.sum((gal_data.iloc[close_gal][['x','y','z']] - host_pos)**2)) < true_memb_dist:
-                    if debug: print(close_gal)
                     host_members[host_rId][j] = close_gal
         
 
-print('\nReducing dataset...')
+print('\nReducing dataset...') # Dropping unnecessary data fields
 
 host_drop = ['row_id','upId','pId','descId','breadthFirstId','scale']
 gal_drop = []
@@ -320,6 +370,7 @@ gal_data = gal_data[[i for i in gal_data.columns.values if i not in gal_drop]]
 
 ## ~~~~~ CALCULATING ROTATED MOCK OBSERVATIONS ~~~~~~
 def rot_matrix_rand( angles = None):
+    # Generate a rotation matrix from a tuple of rotation angles. See https://en.wikipedia.org/wiki/Rotation_matrix
 
     th_x, th_y, th_z = 2*np.pi*np.random.random(3) if angles is None else angles
     
@@ -345,7 +396,9 @@ def rot_matrix_rand( angles = None):
 
 def cut_mock( angles = None ):
     """
-    Rotate catalog. Iterate through clusters. Cut a long cylinder through the entire sim around projected cluster center. I'll call these pillars. Calculate all vlos. Create pure, contaminated catalogs. 
+    Given a set of rotation angles, rotate catalog. Iterate through clusters. Cut a long cylinder through the entire sim around projected cluster center (called pillars). Calculate all vlos. Create pure, contaminated catalogs. 
+    
+    This is wrapped in a function so it can be parallelized.
     """
     # print('\nRotating Box')
     
@@ -447,10 +500,6 @@ def cut_mock( angles = None ):
             pure_catalog.gal.append(clu_gals)
             pure_ind.append(i)
 
-
-    # print('# pure catalog: ' + str(len(pure_ind)))
-    # print('# contaminated catalog: ' + str(len(contam_ind)))
-
     pure_catalog.prop = pure_catalog.prop.iloc[pure_ind]
     contam_catalog.prop = contam_catalog.prop.iloc[contam_ind]
     
@@ -469,8 +518,7 @@ else:
     angle_list = angle_list[0:par['rotations']]
 
 with mp.Pool(processes=13) as pool:
-    catalogs = pool.map(cut_mock, 
-                        angle_list)
+    catalogs = pool.map(cut_mock, angle_list)
                         
 print('Done.')
 
@@ -497,25 +545,31 @@ cat_par = OrderedDict([
     ('min_mass'     ,   par['min_mass']),
     ('min_richness' ,   par['min_richness']),
     
-    ('aperture'    ,   aperture),
+    ('aperture'     ,   aperture),
     ('vcut'         ,   vcut),
     
     ('cosmo'        ,   cosmo)
 ])
 
-pure_catalog = Catalog(par = cat_par,
-                       prop = pd.DataFrame(np.zeros(shape=(pure_len, catalogs[0][0].prop.shape[1]+1)),
-                                           columns = np.append(host_data.columns.values,'rotation')
-                                          ),
-                       gal = [None]*pure_len
-                      )
                       
-contam_catalog = Catalog(par = cat_par,
+contam_catalog = Catalog(par = cat_par.copy(),
                          prop = pd.DataFrame(np.zeros(shape=(contam_len, catalogs[0][1].prop.shape[1]+1)),
                                              columns = np.append(catalogs[0][1].prop.columns.values,'rotation')
                                             ),
                          gal = [None]*contam_len
                         )
+                        
+cat_par['aperture'] = None
+cat_par['vcut'] = None
+
+pure_catalog = Catalog(par = cat_par.copy(),
+                       prop = pd.DataFrame(np.zeros(shape=(pure_len, catalogs[0][0].prop.shape[1]+1)),
+                                           columns = np.append(host_data.columns.values,'rotation')
+                                          ),
+                       gal = [None]*pure_len
+                      )
+                        
+
 pure_c = 0
 contam_c = 0
 
@@ -536,6 +590,12 @@ for i in range(len(catalogs)):
     pure_c = pure_c_end
     contam_c = contam_c_end
     
+
+pure_catalog.gal = np.array(pure_catalog.gal)
+contam_catalog.gal = np.array(contam_catalog.gal)
+    
+    
+    
     
 # ~~~~~ STATS ~~~~~~
 print('Calculating additional statistics...')
@@ -547,6 +607,9 @@ contam_catalog.prop['Ngal'] = [len(x) for x in contam_catalog.gal]
 #sigv
 pure_catalog.prop['sigv'] = [np.std(x['vlos']) for x in pure_catalog.gal]
 contam_catalog.prop['sigv'] = [np.std(x['vlos']) for x in contam_catalog.gal]
+
+
+
 
 
 ## ~~~~~ SAVE DATA ~~~~~~

@@ -4,6 +4,8 @@
 import os
 import sys
 import numpy as np
+import multiprocessing as mp
+import pandas as pd
 from sklearn import linear_model
 from scipy.stats import gaussian_kde
 from collections import OrderedDict
@@ -15,20 +17,25 @@ import matplotlib.pyplot as plt
 ## FUNCTIONS
 
 import tools.matt_tools as matt
+from tools.catalog import Cluster, Catalog
 
 
 ## DATA PARAMETERS
 par = OrderedDict([
-
-    ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn1d_r'),
-    ('data_file'    ,   'UM_z=0.117_med_reduced.npy'),
+
+    ('wdir'         ,   '/home/mho1/scratch/halo_cnn'),
+    ('in_folder'    ,   'data_mocks'),
+    ('out_folder'   ,   'data_processed'),
+    
+    ('data_file'    ,   'Rockstar_UM_z=0.117_pure.p'),
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
     ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     
-    ('new_train'    ,   False) # Reassign training data to have a flat mass distribution. For use for training with one fold
+    ('nfolds'       ,   10 ),
+    ('logm_bin'     ,   0.01)
 
 ])
 
@@ -39,97 +46,51 @@ par = OrderedDict([
 print('\n~~~~~ LOADING DATA ~~~~~')
 # Load and organize
 
-raw_path = os.path.join(par['wdir'], 'data_mocks')
+in_path = os.path.join(par['wdir'], par['in_folder'], par['data_file'])
 
-print('\nData file: ' + par['data_file'] + '\n')
+cat = Catalog().load(in_path)
 
-dat_orig = np.load(os.path.join(raw_path, par['data_file']))
-print('Raw data size: ' + str(sys.getsizeof(dat_orig)/10.**9) + ' GB\n')
+cat.par['vcut'] = 3785.
+cat.par['aperature'] = 2.3
 
 # Subsample
 print('\n~~~~~ SUBSAMPLING ~~~~~')
     
-print('Original data length: ' + str(len(dat_orig)))
-dat = np.random.choice( dat_orig, 
-                        int(par['subsample']* len(dat_orig)),
-                        replace = False)    
-print('New data length: ' + str(len(dat)))
+print('Data length: ' + str(len(cat)))
 
+if par['subsample'] < 1:
+    ind = np.random.choice(range(len(cat)), 
+                           int(par['subsample']*len(cat)),
+                           replace=False
+                          )
+    cat.prop = cat.prop.iloc[ind]
+    cat.gal = cat.gal[ind]
 
-# Reassign train datapoints to an even cluster mass distribution
-if par['new_train']:
-    print('\nREASSIGN TRAINING DATA')
-
-    intrvl = 0.01
-    num_train = 4000
-
-    dat['intrain']=0
-
-    logM = np.log10(dat['Mtot'])
-
-    kde = gaussian_kde(logM) # get a probability distribution for logM
-
-    sample = np.arange(logM.min(),
-                       logM.max(),
-                       intrvl
-                      )
-    pdf = kde(sample)
-    pdf /= pdf.sum()
-    
-    pdf = 1./pdf # invert it
-    pdf /= pdf.sum()
-
-    # sample pdf at each datapoint
-    p = np.ndarray(shape=len(logM))
-
-    for i in range(len(logM)):
-        p[i] = pdf[int((logM[i] - logM.min())/intrvl)] 
-
-    p/=p.sum()
-
-
-    new_logM_indices = np.random.choice(np.arange(len(logM)), num_train, replace=False, p=p) # use the probabilities to choose an even mass profile
-    
-    
-    dat['intrain'][new_logM_indices]=1
-
+print('Subsampled data length: ' + str(len(cat)))
 
 
 
 print('\n~~~~~ DATA CHARACTERISTICS ~~~~~')
-print('data shape: ' + str(dat.shape))
 
-vmax = dat['vlos'].max()
-rmax = dat['Rproj'].max()
-
-par['vmax'] = vmax
-par['rmax'] = rmax
-
-print('vmax: ' + str(vmax))
-print('rmax: ' + str(rmax))
-
-
-
-
-
+print(cat.par)
 
 print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
 
 # Generate input data
 print('\nGenerate input data')
 
-vpdfs = np.ndarray(shape = (len(dat), *par['shape']))
+# pdfs = np.ndarray(shape = (len(cat), *par['shape']))
 
-mesh = np.mgrid[-vmax : vmax : par['shape']*1j]
+mesh = np.mgrid[-cat.par['vcut'] : cat.par['vcut'] : par['shape'][0]*1j]
 
 sample = np.vstack([mesh.ravel()]) # Velocities at fixed intervals. Used to sample velocity pdfs
 
-print('Generating ' + str(len(dat)) + ' KDEs...')
-for i in range(len(dat)):
-    if i%1000==0: print(str(int(i/1000)) + ' / '+str(int(len(dat)/1000)))
+print('Generating ' + str(len(cat)) + ' KDEs...')
 
+def make_pdf(ind):
+    
     # initialize a gaussian kde from galaxy velocities
-    kde = gaussian_kde(dat['vlos'][i][:dat['Ngal'][i]])
+    kde = gaussian_kde(cat.gal[ind]['vlos'])
     
     # sample kde at fixed intervals
     kdeval = np.reshape(kde(sample).T, mesh.shape)
@@ -137,24 +98,56 @@ for i in range(len(dat)):
     # normalize input
     kdeval /= kdeval.sum()
     
-    vpdfs[i,:] = kdeval
+    return kdeval
 
-vpdfs = vpdfs.astype('float32')
+with mp.Pool() as pool:
+    pdfs = np.array(pool.map(make_pdf, range(len(cat))))
+
+pdfs = pdfs.astype('float32')
 
 print("KDE's generated.")
 
 
 print('\nConverting masses, sigv to log scale')
 
-masses = np.log10(dat['Mtot'])
+masses = np.log10(cat.prop['M200c']).values
 masses = masses.reshape((len(masses),1))
 
-sigv = np.log10(dat['sigmav'])
+sigv = np.log10(cat.prop['sigv']).values
 sigv = sigv.reshape((len(masses),1))
 
 
+## ASSIGN FOLDS
+print('\nAssigning test/train in folds...')
+fold_ind = pd.Series(np.random.randint(0, par['nfolds'], len(cat.prop['rockstarId'].unique())), 
+                  index = cat.prop['rockstarId'].unique())
 
+fold = fold_ind[cat.prop['rockstarId']]
 
+fold_assign = pd.DataFrame(np.zeros(shape=(len(cat),par['nfolds'])), 
+                           index = cat.prop.index)
+
+for i in range(par['nfolds']):
+    print('fold:',i)
+    
+    fold_assign.loc[fold_assign.index[fold==i],i] = 2 # Assign test members
+    
+    log_m = np.log10(cat.prop.loc[fold_assign.index[fold!=i],'M200c'])
+
+    bin_edges = np.arange(log_m.min() * 0.9999, (log_m.max() + par['logm_bin'])*1.0001, par['logm_bin'])
+    
+    n_per_bin = int(len(log_m)/(10*len(bin_edges)))
+    
+    for j in range(len(bin_edges)):
+        bin_ind = log_m.index[ (log_m >= bin_edges[j])&(log_m < bin_edges[j]+par['logm_bin']) ]
+        
+        if len(bin_ind) <= n_per_bin:
+            fold_assign.loc[bin_ind,i] = 1 # Assign train members
+            
+        else:
+            fold_assign.loc[np.random.choice(bin_ind, n_per_bin), i] = 1
+
+# fold_assign marks test/train within each fold. 0 = None, 1 = train, 2 = test.
 
 
 ## SAVE
@@ -176,13 +169,11 @@ with open(os.path.join(model_dir, 'parameters.txt'), 'w') as param_file:
 save_dict = {
     'params'    :   par,
     
-    'vpdf'      :   vpdfs,
+    'pdf'       :   pdfs,
     'mass'      :   masses,
     'sigv'      :   sigv,
     
-    'in_train'  :   (dat['intrain']==1),
-    'in_test'   :   (dat['intest']==1),
-    'fold'      :   dat['fold']
+    'fold_assign':  fold_assign,
 } 
 
 
@@ -194,8 +185,7 @@ print('Data saved.')
 
 
 
-
-
+""" 
 ## PLOT CHARACTERISTICS
 print('\n~~~~~ PLOTTING MASS DIST ~~~~~')
 
@@ -222,3 +212,6 @@ print('Figures saved')
 
 
 print('All finished!')
+
+ """
+
