@@ -93,7 +93,7 @@ matt.binnedplot(dat['mass_train'],
                  log=0
                 )
 ax1.set_xlim(xmin=par['mass_min'], xmax=par['mass_max'])
-
+ax1.set_xticks([])
 ax1.set_ylabel('$\log[\sigma_v]$', fontsize=14)
 ax1.legend(fontsize=8,loc=4)
 
@@ -165,13 +165,14 @@ matt.binnedplot( dat['mass_test'], dat['mass_pred'], n=50,
             percentiles=[34,47.5], median=True, ax=ax1, log=0
             )
 ax1.set_ylabel(r'$\log[M_{pred}$]',fontsize=14)
+# ax1.set_xticks([])
 ax1.legend(fontsize=8,loc=2)
 
 
 ax2 = f.add_subplot(gs[1,0], sharex=ax1)
 ax2.plot(one_to_one,[0]*len(one_to_one), color='k', linestyle='dashed')
 
-matt.binnedplot(dat['mass_test'],regr_err,n=25, percentiles=[34], median=True, ax=ax2, label='pow',c='r', errorbar=False, names=False, log=0)
+# matt.binnedplot(dat['mass_test'],regr_err,n=25, percentiles=[34], median=True, ax=ax2, label='pow',c='r', errorbar=False, names=False, log=0)
 
 
 matt.binnedplot(dat['mass_test'],pred_err,n=25, percentiles=[34], median=True, ax=ax2, label='cnn',c='b', errorbar=False, names=False, log=0)
@@ -180,22 +181,23 @@ matt.binnedplot(sdm_dat[:,1],sdm_err,n=25, percentiles=[34], median=True, ax=ax2
 
 ax2.set_ylim(ymin=-1.5,ymax=3)
 ax2.set_ylabel(r'$\epsilon$',fontsize=14)
+# ax2.set_xticks([])
 ax2.legend(fontsize=8)
 
 
 
 
 ax3 = f.add_subplot(gs[2,0], sharex=ax1)
-_ = matt.histplot(dat['mass_train'], n=100, log=True, norm=True, label='train', ax=ax3)
-_ = matt.histplot(dat['mass_test'], n=100, log=True, norm=True, label='test', ax=ax3)
+_ = matt.histplot(dat['mass_train'], n=100, log=1, box=True, label='train', ax=ax3)
+_ = matt.histplot(dat['mass_test'], n=100, log=1, box=True, label='test', ax=ax3)
 
 
-ax3.set_ylabel('pdf',fontsize=14)
+ax3.set_ylabel('$dn/d\log(M_{200c})$',fontsize=14)
 ax3.legend(fontsize=8, loc=3)
 
 ax1.set_xlim(xmin=par['mass_min'], xmax=par['mass_max'])
 
-plt.xlabel(r'$\log$[M]',fontsize=14)
+plt.xlabel(r'$\log(M_{200c})$',fontsize=14)
 ax1.set_title('halo_cnn')
 
 plt.tight_layout()

@@ -96,13 +96,11 @@ dat_dict = np.load(os.path.join(data_path, par['model_name'] + '.npy'), encoding
 # Unpack data
 dat_params = dat_dict['params']
 
-X = dat_dict['vpdf'] # vpdf input
+X = dat_dict['pdf'] # vpdf input
 Y = dat_dict['mass'] # mass output
 sigv = dat_dict['sigv']
 
-in_train = dat_dict['in_train']
-in_test = dat_dict['in_test']
-fold = dat_dict['fold']
+fold_assign = dat_dict['fold_assign']
 
 
 print('Data loaded succesfully')
@@ -124,16 +122,13 @@ if par['norm_output']:
 par['mass_max'] = Y_max
 par['mass_min'] = Y_min
 
-par['fold_max'] = fold.max()
+par['nfolds'] = fold_assign.shape[1]
 
-test_folds = [None]
-
-if par['crossfold']==True:
-    test_folds = np.arange(par['fold_max']+1)
+test_folds = np.arange(par['nfolds'])
 
 
 print('\n~~~~~ TRAINING ~~~~~')
-y_pred = np.zeros(len(in_test))
+y_pred = np.zeros(len(fold_assign))
 hist_all = []
 
 t0 = time.time()
@@ -141,34 +136,29 @@ t0 = time.time()
 for fold_curr in test_folds:
     
     # Find relevant clusters in fold
-    if fold_curr==None:
-        print('\n~~~~~NO CROSSFOLD~~~~~\n')
-        in_train_curr = in_train==1
-        in_test_curr = in_test==1
-    else:
-        print('\n~~~~~TEST FOLD #' + str(fold_curr) + '~~~~~\n')
-        in_train_curr = (in_train==1) & ~(fold==fold_curr)
-        in_test_curr = (in_test==1) & (fold == fold_curr)
+    print('\n~~~~~ TEST FOLD #' + str(fold_curr) + ' ~~~~~\n')
+    in_train = fold_assign[:, fold_curr] == 1
+    in_test = fold_assign[:, fold_curr] == 2
     
     # Create train, test samples
     print('\nGENERATING TRAIN/TEST DATA')
     
     if par['validation']==True:    
-        in_train_ind = np.where(in_train_curr==1)[0]
+        in_train_ind = np.where(in_train)[0]
         
         # Choose 1/10 of training data to be validation data
-        in_val_curr = np.random.choice(in_train_ind, int(len(in_train_ind)/10), replace=False) 
+        in_val = np.random.choice(in_train_ind, int(len(in_train_ind)/10), replace=False) 
         
-        in_val_curr = np.array([(i in in_val_curr) for i in range(len(in_train_curr))])
+        in_val = np.array([(i in in_val) for i in range(len(in_train))])
     else:
-        in_val_curr = np.array([False]*len(in_train_curr))
+        in_val = np.array([False]*len(in_train))
 
 
-    x_train = X[in_train_curr & ~in_val_curr]
-    y_train = Y[in_train_curr & ~in_val_curr]
+    x_train = X[in_train & ~in_val]
+    y_train = Y[in_train & ~in_val]
 
-    x_val = X[in_train_curr & in_val_curr]
-    y_val = Y[in_train_curr & in_val_curr] # Empty if validation==False
+    x_val = X[in_train & in_val]
+    y_val = Y[in_train & in_val] # Empty if validation==False
 
 
     # Data augmentation
@@ -178,7 +168,7 @@ for fold_curr in test_folds:
     y_train = np.append(y_train, y_train,axis=0)
 
     print('# of train: '+str(len(y_train)))
-    print('# of test: ' + str(np.sum(in_test_curr)))
+    print('# of test: ' + str(np.sum(in_test)))
 
     ## MODEL
     print ('\nINITIALIZING MODEL')
@@ -196,8 +186,8 @@ for fold_curr in test_folds:
                       verbose=2)
                       
     np.put( y_pred, 
-            np.where(in_test_curr), 
-            model.predict(X[in_test_curr]))
+            np.where(in_test), 
+            model.predict(X[in_test]))
     
     hist_all.append(hist)
 
@@ -205,19 +195,23 @@ t1 = time.time()
 print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
 
-sigv_train = sigv[in_train==1]
-sigv_test = sigv[in_test==1]
+in_train_all = np.sum(fold_assign == 1, axis=1) > 0
+in_test_all = np.sum(fold_assign == 2, axis=1) > 0
+
+
+sigv_train = sigv[in_train_all==1]
+sigv_test = sigv[in_test_all==1]
 
 if par['norm_output']:
-    y_train = (Y_max - Y_min)*Y[in_train==1] + Y_min
-    y_test = (Y_max - Y_min)*Y[in_test==1] + Y_min
+    y_train = (Y_max - Y_min)*Y[in_train_all==1] + Y_min
+    y_test = (Y_max - Y_min)*Y[in_test_all==1] + Y_min
     
-    y_pred= (Y_max - Y_min)*y_pred[in_test==1] + Y_min
+    y_pred= (Y_max - Y_min)*y_pred[in_test_all==1] + Y_min
 else:
-    y_train = Y[in_train==1]
-    y_test = Y[in_test==1]
+    y_train = Y[in_train_all==1]
+    y_test = Y[in_test_all==1]
     
-    y_pred = y_pred[in_test==1]
+    y_pred = y_pred[in_test_all==1]
     
 
 y_train = y_train.flatten()

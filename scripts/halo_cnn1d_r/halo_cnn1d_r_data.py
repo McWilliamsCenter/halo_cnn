@@ -28,7 +28,7 @@ par = OrderedDict([
     ('in_folder'    ,   'data_mocks'),
     ('out_folder'   ,   'data_processed'),
     
-    ('data_file'    ,   'Rockstar_UM_z=0.117_pure.p'),
+    ('data_file'    ,   'Rockstar_UM_z=0.117_contam.p'),
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
@@ -43,7 +43,7 @@ par = OrderedDict([
 
 
 ## DATA
-print('\n~~~~~ LOADING DATA ~~~~~')
+print('\n~~~~~ LOADING MOCK CATALOG ~~~~~')
 # Load and organize
 
 in_path = os.path.join(par['wdir'], par['in_folder'], par['data_file'])
@@ -75,6 +75,50 @@ print('\n~~~~~ DATA CHARACTERISTICS ~~~~~')
 print(cat.par)
 
 print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
+
+## ASSIGN FOLDS
+print('\nAssigning test/train in folds...')
+fold_ind = pd.Series(np.random.randint(0, par['nfolds'], len(cat.prop['rockstarId'].unique())), 
+                  index = cat.prop['rockstarId'].unique())
+
+fold = fold_ind[cat.prop['rockstarId']]
+
+fold_assign = np.zeros(shape=(len(cat),par['nfolds']))
+
+for i in range(par['nfolds']):
+    print('\nfold:',i)
+    
+    fold_assign[fold==i, i] = 2 # Assign test members
+    
+    log_m = np.log10(cat.prop.loc[(fold!=i).values, 'M200c'])
+
+    bin_edges = np.arange(log_m.min() * 0.9999, (log_m.max() + par['logm_bin'])*1.0001, par['logm_bin'])
+    
+    n_per_bin = int(len(log_m)/(40*len(bin_edges)))
+    
+    for j in range(len(bin_edges)):
+        bin_ind = log_m.index[ (log_m >= bin_edges[j])&(log_m < bin_edges[j]+par['logm_bin']) ]
+        
+        if len(bin_ind) <= n_per_bin:
+            fold_assign[bin_ind,i] = 1 # Assign train members
+            
+        else:
+            fold_assign[np.random.choice(bin_ind, n_per_bin, replace=False), i] = 1
+            
+    
+    print('in_train:', np.sum(fold_assign[:,i]==1))
+    print('in_test:', np.sum(fold_assign[:,i]==2))
+
+# fold_assign marks test/train within each fold. 0 = None, 1 = train, 2 = test.
+
+print('\nRemoving unused data...')
+keep = np.sum(fold_assign, axis=1) != 0
+
+fold_assign = fold_assign[keep, :]
+cat.prop = cat.prop[keep]
+cat.gal = cat.gal[keep]
+
+
 
 # Generate input data
 print('\nGenerate input data')
@@ -117,37 +161,7 @@ sigv = np.log10(cat.prop['sigv']).values
 sigv = sigv.reshape((len(masses),1))
 
 
-## ASSIGN FOLDS
-print('\nAssigning test/train in folds...')
-fold_ind = pd.Series(np.random.randint(0, par['nfolds'], len(cat.prop['rockstarId'].unique())), 
-                  index = cat.prop['rockstarId'].unique())
 
-fold = fold_ind[cat.prop['rockstarId']]
-
-fold_assign = pd.DataFrame(np.zeros(shape=(len(cat),par['nfolds'])), 
-                           index = cat.prop.index)
-
-for i in range(par['nfolds']):
-    print('fold:',i)
-    
-    fold_assign.loc[fold_assign.index[fold==i],i] = 2 # Assign test members
-    
-    log_m = np.log10(cat.prop.loc[fold_assign.index[fold!=i],'M200c'])
-
-    bin_edges = np.arange(log_m.min() * 0.9999, (log_m.max() + par['logm_bin'])*1.0001, par['logm_bin'])
-    
-    n_per_bin = int(len(log_m)/(10*len(bin_edges)))
-    
-    for j in range(len(bin_edges)):
-        bin_ind = log_m.index[ (log_m >= bin_edges[j])&(log_m < bin_edges[j]+par['logm_bin']) ]
-        
-        if len(bin_ind) <= n_per_bin:
-            fold_assign.loc[bin_ind,i] = 1 # Assign train members
-            
-        else:
-            fold_assign.loc[np.random.choice(bin_ind, n_per_bin), i] = 1
-
-# fold_assign marks test/train within each fold. 0 = None, 1 = train, 2 = test.
 
 
 ## SAVE
@@ -185,23 +199,47 @@ print('Data saved.')
 
 
 
-""" 
 ## PLOT CHARACTERISTICS
 print('\n~~~~~ PLOTTING MASS DIST ~~~~~')
 
+print('Loading theoretical HMF...')
+hmf_M200c = np.loadtxt(os.path.join(par['wdir'], 'data_raw', 'dn_dm_MDPL2_z=0.117_M200c.txt'))
+
+x_hmf_M200c, y_hmf_M200c = hmf_M200c
+
+y_hmf_M200c = x_hmf_M200c*y_hmf_M200c*np.log(10)
+x_hmf_M200c = np.log10(x_hmf_M200c)
+
+
+fold = np.random.randint(0,par['nfolds'])
+
+if fold is None:
+    in_train_all = np.sum(fold_assign == 1, axis=1) > 0
+    in_test_all = np.sum(fold_assign == 2, axis=1) > 0
+else:
+    in_train_all = fold_assign[:,fold] == 1
+    in_test_all = fold_assign[:,fold] == 2
 
 f, ax = plt.subplots(figsize=(5,5))
 
-mass_train = masses[(dat['intrain']==1)]
-mass_test = masses[(dat['intest'] == 1)]
+ax.plot(x_hmf_M200c,y_hmf_M200c, label='theo')
 
-_ = matt.histplot(  mass_train, n=75, log=False, 
+
+mass_train = masses[in_train_all]
+mass_test = masses[in_test_all]
+
+_ = matt.histplot(  mass_train, n=75, log=1, box=True,
                     label='train', ax=ax)
-_ = matt.histplot(  mass_test, n=75, log=False, 
+_ = matt.histplot(  mass_test, n=75, log=1, box=True,
                     label='test', ax=ax)
-    
-plt.xlabel('$\log(M_{200c})$', fontsize=20)
-plt.ylabel('$N$', fontsize=20)
+
+plt.xlim(mass_test.min(), mass_test.max())
+
+plt.xlabel('$\log(M_{200c})$', fontsize=16)
+plt.ylabel('$dn/d\log(M_{200c})$', fontsize=16)
+
+if ~(fold is None):
+    plt.title('fold: ' + str(fold), fontsize=20)
 
 plt.legend()
 plt.tight_layout()
@@ -213,5 +251,4 @@ print('Figures saved')
 
 print('All finished!')
 
- """
 
