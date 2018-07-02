@@ -30,10 +30,10 @@ import tools.matt_tools as matt
 ## ML PARAMETERS
 par = OrderedDict([ 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
-    ('model_name'   ,   'halo_cnn2d_r'),
+    ('model_name'   ,   'halo_cnn1d_r'),
 
     ('batch_size'   ,   100),
-    ('epochs'       ,   5),
+    ('epochs'       ,   50),
     ('learning'     ,   0.001),
     
     ('norm_output'  ,   True), # If true, train on output [0,1]. Otherwise, train on regular output (e.g. log(M) in [14,15])
@@ -97,11 +97,13 @@ dat_dict = np.load(os.path.join(data_path, par['model_name'] + '.npy'), encoding
 # Unpack data
 dat_params = dat_dict['params']
 
-X = dat_dict['pdf'] # vpdf input
+X = dat_dict['vpdf'] # vpdf input
 Y = dat_dict['mass'] # mass output
 sigv = dat_dict['sigv']
 
-fold_assign = dat_dict['fold_assign']
+in_train = dat_dict['in_train']
+in_test = dat_dict['in_test']
+fold = dat_dict['fold']
 
 
 print('Data loaded succesfully')
@@ -111,7 +113,7 @@ par = dat_params
 
 
 print('\n~~~~~ PREPARING X,Y ~~~~~')
-# X = np.reshape(X, list(X.shape) + [1])
+X = np.reshape(X, list(X.shape) + [1])
 
 Y_min = Y.min()
 Y_max = Y.max()
@@ -123,14 +125,16 @@ if par['norm_output']:
 par['mass_max'] = Y_max
 par['mass_min'] = Y_min
 
+par['fold_max'] = fold.max()
 
-par['nfolds'] = fold_assign.shape[1]
+test_folds = [None]
 
-test_folds = np.arange(par['nfolds'])
+if par['crossfold']==True:
+    test_folds = np.arange(par['fold_max']+1)
 
 
 print('\n~~~~~ TRAINING ~~~~~')
-y_pred = np.zeros(len(fold_assign))
+y_pred = np.zeros(len(in_test))
 hist_all = []
 
 t0 = time.time()
@@ -138,29 +142,34 @@ t0 = time.time()
 for fold_curr in test_folds:
     
     # Find relevant clusters in fold
-    print('\n~~~~~ TEST FOLD #' + str(fold_curr) + ' ~~~~~\n')
-    in_train = fold_assign[:, fold_curr] == 1
-    in_test = fold_assign[:, fold_curr] == 2
+    if fold_curr==None:
+        print('\n~~~~~NO CROSSFOLD~~~~~\n')
+        in_train_curr = in_train==1
+        in_test_curr = in_test==1
+    else:
+        print('\n~~~~~TEST FOLD #' + str(fold_curr) + '~~~~~\n')
+        in_train_curr = (in_train==1) & ~(fold==fold_curr)
+        in_test_curr = (in_test==1) & (fold == fold_curr)
     
     # Create train, test samples
     print('\nGENERATING TRAIN/TEST DATA')
     
     if par['validation']==True:    
-        in_train_ind = np.where(in_train)[0]
+        in_train_ind = np.where(in_train_curr==1)[0]
         
         # Choose 1/10 of training data to be validation data
-        in_val = np.random.choice(in_train_ind, int(len(in_train_ind)/10), replace=False) 
+        in_val_curr = np.random.choice(in_train_ind, int(len(in_train_ind)/10), replace=False) 
         
-        in_val = np.array([(i in in_val) for i in range(len(in_train))])
+        in_val_curr = np.array([(i in in_val_curr) for i in range(len(in_train_curr))])
     else:
-        in_val = np.array([False]*len(in_train))
+        in_val_curr = np.array([False]*len(in_train_curr))
 
 
-    x_train = X[in_train & ~in_val]
-    y_train = Y[in_train & ~in_val]
+    x_train = X[in_train_curr & ~in_val_curr]
+    y_train = Y[in_train_curr & ~in_val_curr]
 
-    x_val = X[in_train & in_val]
-    y_val = Y[in_train & in_val] # Empty if validation==False
+    x_val = X[in_train_curr & in_val_curr]
+    y_val = Y[in_train_curr & in_val_curr] # Empty if validation==False
 
 
     # Data augmentation
@@ -170,7 +179,7 @@ for fold_curr in test_folds:
     y_train = np.append(y_train, y_train,axis=0)
 
     print('# of train: '+str(len(y_train)))
-    print('# of test: ' + str(np.sum(in_test)))
+    print('# of test: ' + str(np.sum(in_test_curr)))
 
     ## MODEL
     print ('\nINITIALIZING MODEL')
@@ -188,8 +197,8 @@ for fold_curr in test_folds:
                       verbose=2)
                       
     np.put( y_pred, 
-            np.where(in_test), 
-            model.predict(X[in_test]))
+            np.where(in_test_curr), 
+            model.predict(X[in_test_curr]))
     
     hist_all.append(hist)
 

@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import multiprocessing as mp
 import pandas as pd
+
 from sklearn import linear_model
 from scipy.stats import gaussian_kde
 from collections import OrderedDict
@@ -35,7 +36,8 @@ par = OrderedDict([
     ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     
     ('nfolds'       ,   10 ),
-    ('logm_bin'     ,   0.01)
+    ('logm_bin'     ,   0.01),
+    ('mbin_frac'    ,   1/40.)
 
 ])
 
@@ -50,8 +52,6 @@ in_path = os.path.join(par['wdir'], par['in_folder'], par['data_file'])
 
 cat = Catalog().load(in_path)
 
-cat.par['vcut'] = 3785.
-cat.par['aperature'] = 2.3
 
 # Subsample
 print('\n~~~~~ SUBSAMPLING ~~~~~')
@@ -74,6 +74,7 @@ print('\n~~~~~ DATA CHARACTERISTICS ~~~~~')
 
 print(cat.par)
 
+
 print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
 
 ## ASSIGN FOLDS
@@ -94,7 +95,7 @@ for i in range(par['nfolds']):
 
     bin_edges = np.arange(log_m.min() * 0.9999, (log_m.max() + par['logm_bin'])*1.0001, par['logm_bin'])
     
-    n_per_bin = int(len(log_m)/(40*len(bin_edges)))
+    n_per_bin = int(par['mbin_frac']*len(log_m)/len(bin_edges))
     
     for j in range(len(bin_edges)):
         bin_ind = log_m.index[ (log_m >= bin_edges[j])&(log_m < bin_edges[j]+par['logm_bin']) ]
@@ -123,11 +124,9 @@ cat.gal = cat.gal[keep]
 # Generate input data
 print('\nGenerate input data')
 
-# pdfs = np.ndarray(shape = (len(cat), *par['shape']))
-
 mesh = np.mgrid[-cat.par['vcut'] : cat.par['vcut'] : par['shape'][0]*1j]
 
-sample = np.vstack([mesh.ravel()]) # Velocities at fixed intervals. Used to sample velocity pdfs
+sample = np.vstack([mesh.ravel()]) # Sample at fixed intervals. Used to sample pdfs
 
 print('Generating ' + str(len(cat)) + ' KDEs...')
 
@@ -187,7 +186,7 @@ save_dict = {
     'mass'      :   masses,
     'sigv'      :   sigv,
     
-    'fold_assign':  fold_assign,
+    'fold_assign':  fold_assign
 } 
 
 
@@ -211,12 +210,15 @@ y_hmf_M200c = x_hmf_M200c*y_hmf_M200c*np.log(10)
 x_hmf_M200c = np.log10(x_hmf_M200c)
 
 
+
 fold = np.random.randint(0,par['nfolds'])
 
 if fold is None:
     in_train_all = np.sum(fold_assign == 1, axis=1) > 0
     in_test_all = np.sum(fold_assign == 2, axis=1) > 0
 else:
+    print('Plotting fold #' + str(fold) + ...)
+    
     in_train_all = fold_assign[:,fold] == 1
     in_test_all = fold_assign[:,fold] == 2
 

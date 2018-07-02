@@ -22,7 +22,7 @@ import tools.matt_tools as matt
 ## MODEL PARAMETERS
 wdir = '/home/mho1/scratch/halo_cnn/'
 
-model_name = 'halo_cnn2d_r'
+model_name = 'halo_cnn1d_r'
 data_dir = os.path.join(wdir, 'saved_models', model_name, 'model_data')
 
 sdm_file = os.path.join(wdir,'data_raw', 'UM_0.5_MLv_0_preds.npy')

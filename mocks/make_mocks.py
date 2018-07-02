@@ -63,7 +63,7 @@ par = OrderedDict([
     ('min_richness' ,   10),
     
     ('cut_size'     ,   'large'),
-    ('rotations'    ,   10),
+    ('rotations'    ,   13),
     
     ('cosmo' ,   {'H_0': 100, # [km/s/(Mpc/h)]
                   'Omega_m': 0.307115,
@@ -432,11 +432,12 @@ def cut_mock( angles = None ):
     pure_ind = []
     contam_ind = []
 
-    gal_dtype = [ ('xproj','<f4'),
-                  ('yproj','<f4'),
-                  ('vlos', '<f4'),
-                  ('true_memb','<i4'),
-                  ('mvir','<f4')
+    gal_dtype = [ ('xproj','<f8'),
+                  ('yproj','<f8'),
+                  ('Rproj','<f8'),
+                  ('vlos', '<f8'),
+                  ('true_memb','?'),
+                  ('mvir','<f8')
                 ]
     gal_index = gal_data.index.to_series()
 
@@ -465,6 +466,8 @@ def cut_mock( angles = None ):
             
             clu_gals['xproj'] = gal_pos['x'].loc[obs_members_index] - host_pos.iloc[i]['x']
             clu_gals['yproj'] = gal_pos['y'].loc[obs_members_index] - host_pos.iloc[i]['y']
+            clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
+            
             clu_gals['vlos'] = obs_members_v_rel
             clu_gals['true_memb'] = [x in true_members
                                      for x in obs_members_index
@@ -493,6 +496,8 @@ def cut_mock( angles = None ):
             
             clu_gals['xproj'] = gal_pos['x'].iloc[true_members] - host_pos.iloc[i]['x']
             clu_gals['yproj'] = gal_pos['y'].iloc[true_members] - host_pos.iloc[i]['y']
+            clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
+            
             clu_gals['vlos'] = v_rel.loc[gal_index.iloc[true_members]]
             clu_gals['true_memb'] = True
             clu_gals['mvir'] = gal_data['mvir'].loc[true_members]
@@ -613,7 +618,7 @@ contam_catalog.prop['sigv'] = [np.std(x['vlos']) for x in contam_catalog.gal]
 
 
 ## ~~~~~ SAVE DATA ~~~~~~
-if ~debug:
+if not debug:
     print('Saving...')
     pure_catalog.save(os.path.join(par['wdir'], 
                                    par['out_folder'], 

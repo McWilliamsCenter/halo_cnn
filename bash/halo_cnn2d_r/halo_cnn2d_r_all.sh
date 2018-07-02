@@ -32,6 +32,6 @@ module unload keras/2.0.6_anaconda
 printf "\nPlotting..."
 module load python3/intel_3.6.3
 
-python ./scripts/halo_cnn2d_r/halo_cnn2d_r_plot.py
+# python ./scripts/halo_cnn2d_r/halo_cnn2d_r_plot.py
 
 module unload python3/intel_3.6.3
