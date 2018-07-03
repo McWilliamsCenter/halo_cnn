@@ -37,7 +37,7 @@ par = OrderedDict([
     
     ('nfolds'       ,   10),
     ('logm_bin'     ,   0.01),
-    ('mbin_frac'    ,   1/40.)
+    ('mbin_frac'    ,   0.025)
 
 ])
 
@@ -67,7 +67,7 @@ if par['subsample'] < 1:
                            int(par['subsample']*len(cat)),
                            replace=False
                           )
-    cat.prop = cat.prop.iloc[ind]
+    cat.prop = cat.prop.iloc[ind].reset_index(drop=True)
     cat.gal = cat.gal[ind]
 
 print('Subsampled data length: ' + str(len(cat)))
@@ -140,7 +140,12 @@ sample = np.vstack([mesh[0].ravel(), mesh[1].ravel()]) # Sample at fixed interva
 
 print('Generating ' + str(len(cat)) + ' KDEs...')
 
+progress = list(np.random.randint(0,len(cat),10))
+
 def make_pdf(ind):
+    if ind in progress:
+        print('marker:', progress.index(ind),'/10' )
+        
     memb = np.ndarray(shape=(2,cat.prop.loc[ind, 'Ngal']))
 
     memb[0,:] = cat.gal[ind]['vlos']

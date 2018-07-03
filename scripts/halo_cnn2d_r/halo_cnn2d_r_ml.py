@@ -32,8 +32,8 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn2d_r'),
 
-    ('batch_size'   ,   100),
-    ('epochs'       ,   5),
+    ('batch_size'   ,   20),
+    ('epochs'       ,   50),
     ('learning'     ,   0.001),
     
     ('norm_output'  ,   True), # If true, train on output [0,1]. Otherwise, train on regular output (e.g. log(M) in [14,15])
