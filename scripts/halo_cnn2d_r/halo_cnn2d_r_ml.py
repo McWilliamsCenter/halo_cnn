@@ -5,10 +5,12 @@ import sys
 import os
 import numpy as np
 import numpy.lib.recfunctions as nprf
+import time
+import pickle
+
+from collections import OrderedDict
 from sklearn import linear_model
 from scipy.stats import gaussian_kde
-import time
-from collections import OrderedDict
 
 import matplotlib as mpl
 mpl.use('Agg')
@@ -32,8 +34,8 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn2d_r'),
 
-    ('batch_size'   ,   20),
-    ('epochs'       ,   50),
+    ('batch_size'   ,   100),
+    ('epochs'       ,   100),
     ('learning'     ,   0.001),
     
     ('norm_output'  ,   True), # If true, train on output [0,1]. Otherwise, train on regular output (e.g. log(M) in [14,15])
@@ -92,7 +94,9 @@ par['model_num'] = 0 if len(log)==0 else max(log) + 1
 ## DATA
 print('\n~~~~~ LOADING PROCESSED DATA ~~~~~')
 
-dat_dict = np.load(os.path.join(data_path, par['model_name'] + '.npy'), encoding='latin1').item()
+with open(os.path.join(data_path, par['model_name'] + '.p'), 'rb') as f:
+    dat_dict = pickle.load(f)
+
 
 # Unpack data
 dat_params = dat_dict['params']

@@ -4,6 +4,7 @@ This is a module to define the Cluster and Catalog classes. These classes make i
 
 ## ~~~~~ IMPORTS ~~~~~~
 import pickle
+from numpy import ndarray
 
 ## ~~~~~ CLASS DEFINITIONS ~~~~~~
 class Cluster:
@@ -14,8 +15,14 @@ class Cluster:
 
 class Catalog:
     def __getitem__(self, key):
-        return Cluster(prop = self.prop.iloc[key],
-                       gal = self.gal[key])
+        
+        if (isinstance(key, int) | isinstance(key, list) | isinstance(key, ndarray)):
+            return Catalog(par=self.par,
+                           prop = self.prop.iloc[key].reset_index(drop=True),
+                           gal = self.gal[key])
+        else:
+            raise Exception("Unknown key type: " + str(type(key)))
+            
     def __len__(self):
         return len(self.prop)
     
@@ -26,7 +33,7 @@ class Catalog:
     
     def save(self,filename):
         with open(filename, 'wb') as out_file:
-            pickle.dump(self, out_file)
+            pickle.dump(self, out_file, protocol=4)
     def load(self, filename):
         print('Loading catalog from: ' + filename)
         with open(filename, 'rb') as in_file:

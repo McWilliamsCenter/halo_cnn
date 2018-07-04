@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import multiprocessing as mp
 import pandas as pd
+import pickle
 
 from sklearn import linear_model
 from scipy.stats import gaussian_kde
@@ -18,7 +19,7 @@ import matplotlib.pyplot as plt
 ## FUNCTIONS
 
 import tools.matt_tools as matt
-from tools.catalog import Cluster, Catalog
+from tools.catalog import Catalog
 
 
 ## DATA PARAMETERS
@@ -29,7 +30,7 @@ par = OrderedDict([
     ('in_folder'    ,   'data_mocks'),
     ('out_folder'   ,   'data_processed'),
     
-    ('data_file'    ,   'Rockstar_UM_z=0.117_contam.p'),
+    ('data_file'    ,   'Rockstar_UM_z=0.117_contam_rot10.p'),
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
@@ -40,7 +41,8 @@ par = OrderedDict([
     ('mbin_frac'    ,   0.025)
 
 ])
-
+# For running
+n_proc = 4
 
 
 
@@ -67,8 +69,7 @@ if par['subsample'] < 1:
                            int(par['subsample']*len(cat)),
                            replace=False
                           )
-    cat.prop = cat.prop.iloc[ind].reset_index(drop=True)
-    cat.gal = cat.gal[ind]
+    cat = cat[ind]
 
 print('Subsampled data length: ' + str(len(cat)))
 
@@ -122,8 +123,7 @@ print('\nRemoving unused data...')
 keep = np.sum(fold_assign, axis=1) != 0
 
 fold_assign = fold_assign[keep, :]
-cat.prop = cat.prop[keep]
-cat.gal = cat.gal[keep]
+cat = cat[keep]
 
 
 
@@ -162,8 +162,12 @@ def make_pdf(ind):
     
     return kdeval
 
-with mp.Pool() as pool:
+import time
+t0 = time.time()
+with mp.Pool(processes=n_proc) as pool:
     pdfs = np.array( pool.map(make_pdf, range(len(cat))) )
+print(time.time() - t0)
+
 
 pdfs = pdfs.astype('float32')
 
@@ -208,8 +212,10 @@ save_dict = {
     'fold_assign':  fold_assign
 } 
 
+with open(os.path.join(model_dir, par['model_name'] + '.p'),'wb') as f:
+    pickle.dump(save_dict, f, protocol = pickle.HIGHEST_PROTOCOL)
 
-np.save(os.path.join(model_dir, par['model_name'] + '.npy'), save_dict)
+# np.save(os.path.join(model_dir, par['model_name'] + '.npy'), save_dict, allow_pickle=True)
 
 print('Data saved.')
 

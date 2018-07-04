@@ -26,6 +26,10 @@ This code is used to generate a mock catalog from MDPL2 Rockstar data. The main 
         
     6. Organize output and save data
 
+
+~~~~~ TODO ~~~~~~
+* Add sigparing
+
 """
 
 
@@ -43,7 +47,7 @@ import multiprocessing as mp
 from scipy.spatial import KDTree
 from collections import OrderedDict, defaultdict
 
-from tools.catalog import Cluster, Catalog
+from tools.catalog import Catalog
 
 
 ## ~~~~~~ PARAMETERS ~~~~~~
@@ -71,7 +75,10 @@ par = OrderedDict([
                   'c': 299792.458 # [km/s]
                  })
     ])
-    
+## For running
+n_proc = 13
+
+
 ## For debugging
 debug = False
 
@@ -286,7 +293,7 @@ def in_pad_region(key):
             
     return p_region
 
-with mp.Pool(processes=13) as pool:
+with mp.Pool(processes= n_proc) as pool:
     to_pad_ind = pool.map(in_pad_region, pad_regions) # each process checks a different padding region
 
 print('Padding regions: ')
