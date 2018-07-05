@@ -195,20 +195,21 @@ t1 = time.time()
 print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
 
+
 in_train_all = np.sum(fold_assign == 1, axis=1) > 0
 in_test_all = np.sum(fold_assign == 2, axis=1) > 0
 
 
-sigv_train = sigv[in_train_all==1]
+sigv_train = sigv[in_train==1]
 sigv_test = sigv[in_test_all==1]
 
 if par['norm_output']:
-    y_train = (Y_max - Y_min)*Y[in_train_all==1] + Y_min
+    y_train = (Y_max - Y_min)*Y[in_train==1] + Y_min
     y_test = (Y_max - Y_min)*Y[in_test_all==1] + Y_min
     
     y_pred= (Y_max - Y_min)*y_pred[in_test_all==1] + Y_min
 else:
-    y_train = Y[in_train_all==1]
+    y_train = Y[in_train==1]
     y_test = Y[in_test_all==1]
     
     y_pred = y_pred[in_test_all==1]
@@ -225,8 +226,13 @@ print('~~~~~ SAVING PARAMETERS ~~~~~')
 model_name_save = par['model_name'] + '_' + str(par['model_num'])
 
 model_dir = os.path.join(save_dir, model_name_save)
+dat_dir = os.path.join(save_dir, 'model_data')
+
 if not os.path.isdir(model_dir):
     os.makedirs(model_dir)
+
+if not os.path.isdir(dat_dir):
+    os.makedirs(dat_dir)
 
 with open(os.path.join(model_dir, 'parameters.txt'), 'w') as param_file:
     param_file.write('\n~~~ DATA, ML PARAMETERS ~~~ \n\n')
@@ -286,7 +292,7 @@ save_dict = {
     'mass_pred'    :   y_pred
 }
 
-np.save(os.path.join(save_dir, 'model_data', model_name_save + '.npy'), save_dict)
+np.save(os.path.join(dat_dir, model_name_save + '.npy'), save_dict)
 
 print('Output data saved.')
 

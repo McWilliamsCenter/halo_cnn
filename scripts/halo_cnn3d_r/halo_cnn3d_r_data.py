@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import multiprocessing as mp
 import pandas as pd
+import pickle
 
 from sklearn import linear_model
 from scipy.stats import gaussian_kde
@@ -18,14 +19,14 @@ import matplotlib.pyplot as plt
 ## FUNCTIONS
 
 import tools.matt_tools as matt
-from tools.catalog import Cluster, Catalog
+from tools.catalog import Catalog
 
 
 ## DATA PARAMETERS
 par = OrderedDict([
-    ('model_name'   ,   'halo_cnn1d_r'),
+    ('model_name'   ,   'halo_cnn3d_r'),
 
-    ('wdir'         ,   '/home/mho1/scratch/halo_cnn'),
+    ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('in_folder'    ,   'data_mocks'),
     ('out_folder'   ,   'data_processed'),
     
@@ -33,9 +34,9 @@ par = OrderedDict([
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
-    ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
+    ('shape'        ,   (48,48,6)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     
-    ('nfolds'       ,   10 ),
+    ('nfolds'       ,   10),
     ('logm_bin'     ,   0.01),
     ('mbin_frac'    ,   0.025)
 
@@ -46,13 +47,17 @@ n_proc = 4
 
 
 ## DATA
-print('\n~~~~~ LOADING MOCK CATALOG ~~~~~')
+print('\n~~~~~ LOADING DATA ~~~~~')
 # Load and organize
 
 in_path = os.path.join(par['wdir'], par['in_folder'], par['data_file'])
 
 cat = Catalog().load(in_path)
 
+if (cat.par['vcut'] is None) & (cat.par['aperture'] is None):
+    print('Pure catalog...')
+    cat.par['vcut'] = 3785.
+    cat.par['aperture'] = 2.3
 
 # Subsample
 print('\n~~~~~ SUBSAMPLING ~~~~~')
@@ -64,16 +69,17 @@ if par['subsample'] < 1:
                            int(par['subsample']*len(cat)),
                            replace=False
                           )
-    cat.prop = cat.prop.iloc[ind]
-    cat.gal = cat.gal[ind]
+    cat = cat[ind]
 
 print('Subsampled data length: ' + str(len(cat)))
 
 
 
 print('\n~~~~~ DATA CHARACTERISTICS ~~~~~')
+for key in cat.par.keys():
+    print(key,':', cat.par[key])
 
-print(cat.par)
+
 
 
 print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
@@ -117,35 +123,51 @@ print('\nRemoving unused data...')
 keep = np.sum(fold_assign, axis=1) != 0
 
 fold_assign = fold_assign[keep, :]
-cat.prop = cat.prop[keep]
-cat.gal = cat.gal[keep]
+cat = cat[keep]
+
 
 
 
 # Generate input data
 print('\nGenerate input data')
 
-mesh = np.mgrid[-cat.par['vcut'] : cat.par['vcut'] : par['shape'][0]*1j]
+mesh = np.mgrid[-cat.par['vcut'] : cat.par['vcut'] : par['shape'][0]*1j,
+                0 : cat.par['aperture'] : par['shape'][1]*1j               
+                ]
 
-sample = np.vstack([mesh.ravel()]) # Sample at fixed intervals. Used to sample pdfs
+sample = np.vstack([mesh[0].ravel(), mesh[1].ravel()]) # Sample at fixed intervals. Used to sample pdfs
+
 
 print('Generating ' + str(len(cat)) + ' KDEs...')
 
+progress = list(np.random.randint(0,len(cat),10))
+
 def make_pdf(ind):
+    if ind in progress:
+        print('marker:', progress.index(ind),'/10' )
+        
+    memb = np.ndarray(shape=(2,cat.prop.loc[ind, 'Ngal']))
+
+    memb[0,:] = cat.gal[ind]['vlos']
+    memb[1,:] = cat.gal[ind]['Rproj']# np.sqrt(cat.gal[i]['xproj']**2 + cat.gal[i]['yproj']**2)
     
-    # initialize a gaussian kde from galaxy velocities
-    kde = gaussian_kde(cat.gal[ind]['vlos'])
-    
+    # initialize a gaussian kde from galaxies
+    kde = gaussian_kde(memb)
+
     # sample kde at fixed intervals
-    kdeval = np.reshape(kde(sample).T, mesh.shape)
-    
+    kdeval = np.reshape(kde(sample).T, mesh[0].shape)
+
     # normalize input
     kdeval /= kdeval.sum()
     
     return kdeval
 
+import time
+t0 = time.time()
 with mp.Pool(processes=n_proc) as pool:
-    pdfs = np.array(pool.map(make_pdf, range(len(cat))))
+    pdfs = np.array( pool.map(make_pdf, range(len(cat))) )
+print(time.time() - t0)
+
 
 pdfs = pdfs.astype('float32')
 
@@ -190,10 +212,14 @@ save_dict = {
     'fold_assign':  fold_assign
 } 
 
+with open(os.path.join(model_dir, par['model_name'] + '.p'),'wb') as f:
+    pickle.dump(save_dict, f, protocol = pickle.HIGHEST_PROTOCOL)
 
-np.save(os.path.join(model_dir, par['model_name'] + '.npy'), save_dict)
+# np.save(os.path.join(model_dir, par['model_name'] + '.npy'), save_dict, allow_pickle=True)
 
 print('Data saved.')
+
+
 
 
 
@@ -218,23 +244,24 @@ if fold is None:
     in_train_all = np.sum(fold_assign == 1, axis=1) > 0
     in_test_all = np.sum(fold_assign == 2, axis=1) > 0
 else:
-    print('Plotting fold #' + str(fold) + ...)
+    print('Plotting fold #' + str(fold) + '...')
     
     in_train_all = fold_assign[:,fold] == 1
     in_test_all = fold_assign[:,fold] == 2
 
 f, ax = plt.subplots(figsize=(5,5))
 
-ax.plot(x_hmf_M200c,y_hmf_M200c, label='theo')
+ax.semilogy(x_hmf_M200c,y_hmf_M200c, label='theo')
 
 
 mass_train = masses[in_train_all]
 mass_test = masses[in_test_all]
 
-_ = matt.histplot(  mass_train, n=75, log=1, box=True,
-                    label='train', ax=ax)
-_ = matt.histplot(  mass_test, n=75, log=1, box=True,
-                    label='test', ax=ax)
+if (len(mass_train) > 0) & (len(mass_test)>0):
+    _ = matt.histplot(  mass_train, n=75, log=1, box=True,
+                        label='train', ax=ax)
+    _ = matt.histplot(  mass_test, n=75, log=1, box=True,
+                        label='test', ax=ax)
 
 plt.xlim(mass_test.min(), mass_test.max())
 
@@ -253,5 +280,3 @@ print('Figures saved')
 
 
 print('All finished!')
-
-
