@@ -36,6 +36,8 @@ par = OrderedDict([
     
     ('shape'        ,   (48,48)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     
+    ('bandwidth'    ,   'avg_scott'), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
+    
     ('nfolds'       ,   10),
     ('logm_bin'     ,   0.01),
     ('mbin_frac'    ,   0.025)
@@ -80,9 +82,7 @@ for key in cat.par.keys():
     print(key,':', cat.par[key])
 
 
-
-
-print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
+print('\n~~~~~ ASSIGNING FOLDS ~~~~~~')
 
 ## ASSIGN FOLDS
 print('\nAssigning test/train in folds...')
@@ -127,6 +127,17 @@ cat = cat[keep]
 
 
 
+print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
+
+if par['bandwidth'] == 'avg_scott':
+    def scott_bandwidth(N, d):
+        return N**(-1./(d+4))
+        
+    bandwidth = scott_bandwidth(cat.prop['Ngal'].mean(), len(par['shape']))
+else:
+    bandwidth = par['bandwidth']
+    
+print('bandwidth:', bandwidth)
 
 # Generate input data
 print('\nGenerate input data')
@@ -152,7 +163,7 @@ def make_pdf(ind):
     memb[1,:] = cat.gal[ind]['Rproj']# np.sqrt(cat.gal[i]['xproj']**2 + cat.gal[i]['yproj']**2)
     
     # initialize a gaussian kde from galaxies
-    kde = gaussian_kde(memb)
+    kde = gaussian_kde(memb, bandwidth)
 
     # sample kde at fixed intervals
     kdeval = np.reshape(kde(sample).T, mesh[0].shape)

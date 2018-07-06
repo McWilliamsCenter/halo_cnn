@@ -33,7 +33,9 @@ par = OrderedDict([
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
-    ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
+    ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled
+    
+    ('bandwidth'    ,   'avg_scott'), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
     
     ('nfolds'       ,   10 ),
     ('logm_bin'     ,   0.01),
@@ -41,7 +43,7 @@ par = OrderedDict([
 
 ])
 # For running
-n_proc = 4
+n_proc = None
 
 
 
@@ -76,7 +78,7 @@ print('\n~~~~~ DATA CHARACTERISTICS ~~~~~')
 print(cat.par)
 
 
-print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
+print('\n~~~~~ ASSIGNING FOLDS ~~~~~~')
 
 ## ASSIGN FOLDS
 print('\nAssigning test/train in folds...')
@@ -121,6 +123,17 @@ cat.prop = cat.prop[keep]
 cat.gal = cat.gal[keep]
 
 
+print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
+
+if par['bandwidth'] == 'avg_scott':
+    def scott_bandwidth(N, d):
+        return N**(-1./(d+4))
+        
+    bandwidth = scott_bandwidth(cat.prop['Ngal'].mean(), len(par['shape']))
+else:
+    bandwidth = par['bandwidth']
+    
+print('bandwidth:', bandwidth)
 
 # Generate input data
 print('\nGenerate input data')
@@ -134,7 +147,7 @@ print('Generating ' + str(len(cat)) + ' KDEs...')
 def make_pdf(ind):
     
     # initialize a gaussian kde from galaxy velocities
-    kde = gaussian_kde(cat.gal[ind]['vlos'])
+    kde = gaussian_kde(cat.gal[ind]['vlos'], bandwidth)
     
     # sample kde at fixed intervals
     kdeval = np.reshape(kde(sample).T, mesh.shape)
@@ -218,7 +231,7 @@ if fold is None:
     in_train_all = np.sum(fold_assign == 1, axis=1) > 0
     in_test_all = np.sum(fold_assign == 2, axis=1) > 0
 else:
-    print('Plotting fold #' + str(fold) + ...)
+    print('Plotting fold #' + str(fold) + '...')
     
     in_train_all = fold_assign[:,fold] == 1
     in_test_all = fold_assign[:,fold] == 2
