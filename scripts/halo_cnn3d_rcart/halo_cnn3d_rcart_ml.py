@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
-from keras.layers import Conv1D, MaxPooling1D
+from keras.layers import Conv3D, MaxPooling3D
 from keras.constraints import maxnorm
 from keras.wrappers.scikit_learn import KerasRegressor
 
@@ -32,10 +32,10 @@ import tools.matt_tools as matt
 ## ML PARAMETERS
 par = OrderedDict([ 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
-    ('model_name'   ,   'halo_cnn2d_r'),
+    ('model_name'   ,   'halo_cnn3d_rcart'),
 
-    ('batch_size'   ,   100),
-    ('epochs'       ,   20),
+    ('batch_size'   ,   1000),
+    ('epochs'       ,   15),
     ('learning'     ,   0.001),
     
     ('norm_output'  ,   True), # If true, train on output [0,1]. Otherwise, train on regular output (e.g. log(M) in [14,15])
@@ -49,11 +49,11 @@ par = OrderedDict([
 def baseline_model():
     model = Sequential()
 
-    model.add(Conv1D(32, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Conv3D(32, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
 
-    model.add(Conv1D(32, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
+    model.add(Conv3D(32, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 
-    model.add(MaxPooling1D(pool_size=2))
+    model.add(MaxPooling3D(pool_size=2))
 
     model.add(Dropout(0.25))
     model.add(Flatten())
@@ -99,7 +99,7 @@ with open(os.path.join(data_path, par['model_name'] + '.p'), 'rb') as f:
 # Unpack data
 dat_params = dat_dict['params']
 
-X = dat_dict['pdf'] # vpdf input
+X = dat_dict['pdf'] # pdf input
 Y = dat_dict['mass'] # mass output
 sigv = dat_dict['sigv']
 
@@ -113,7 +113,7 @@ par = dat_params
 
 
 print('\n~~~~~ PREPARING X,Y ~~~~~')
-# X = np.reshape(X, list(X.shape) + [1])
+X = np.reshape(X, list(X.shape) + [1])
 
 Y_min = Y.min()
 Y_max = Y.max()
@@ -170,9 +170,16 @@ for fold_curr in test_folds:
     # flip vlos axis
     x_train = np.append(x_train, np.flip(x_train,1),axis=0)
     y_train = np.append(y_train, y_train,axis=0)
+    # flip x_proj axis
+    x_train = np.append(x_train, np.flip(x_train,2), axis=0)
+    y_train = np.append(y_train, y_train, axis=0)
+    # flip y_proj axis
+    x_train = np.append(x_train, np.flip(x_train,3), axis=0)
+    y_train = np.append(y_train, y_train, axis=0)
 
     print('# of train: '+str(len(y_train)))
     print('# of test: ' + str(np.sum(in_test)))
+    print('# of val: ' + str(np.sum(in_val)))
 
     ## MODEL
     print ('\nINITIALIZING MODEL')
@@ -285,7 +292,7 @@ print('Saving output data\n')
 
 save_dict = {
     'params'    :   par,
-
+    
     'mass_test'    :   y_test,
     'mass_pred'    :   y_pred
 }

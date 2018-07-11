@@ -25,7 +25,7 @@ from tools.catalog import Catalog
 
 ## DATA PARAMETERS
 par = OrderedDict([
-    ('model_name'   ,   'halo_cnn2d_r'),
+    ('model_name'   ,   'halo_cnn3d_rcart'),
 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('in_folder'    ,   'data_mocks'),
@@ -35,17 +35,18 @@ par = OrderedDict([
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
-    ('shape'        ,   (48,48)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
+    ('shape'        ,   (24,17,17)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     
-    ('bandwidth'    ,   0.35), # 'avg_scott'), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
+    ('bandwidth'    ,   'avg_scott'), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
     
     ('nfolds'       ,   10),
+    ('test_nrot'    ,   3),
     ('logm_bin'     ,   0.01),
     ('mbin_frac'    ,   0.025)
 
 ])
 # For running
-n_proc = 4
+n_proc = 1
 
 
 
@@ -97,7 +98,7 @@ fold_assign = np.zeros(shape=(len(cat),par['nfolds']))
 for i in range(par['nfolds']):
     print('\nfold:',i)
     
-    fold_assign[fold==i, i] = 2 # Assign test members
+    fold_assign[(fold==i).values & (cat.prop['rotation'] < par['test_nrot']).values, i] = 2 # Assign test members
     
     log_m = np.log10(cat.prop.loc[(fold!=i).values, 'M200c'])
 
@@ -144,10 +145,11 @@ print('bandwidth:', bandwidth)
 print('\nGenerate input data')
 
 mesh = np.mgrid[-cat.par['vcut'] : cat.par['vcut'] : par['shape'][0]*1j,
-                0 : cat.par['aperture'] : par['shape'][1]*1j               
+                -cat.par['aperture'] : cat.par['aperture'] : par['shape'][1]*1j,
+                -cat.par['aperture'] : cat.par['aperture'] : par['shape'][2]*1j
                 ]
 
-sample = np.vstack([mesh[0].ravel(), mesh[1].ravel()]) # Sample at fixed intervals. Used to sample pdfs
+sample = np.vstack([mesh[0].ravel(), mesh[1].ravel(),  mesh[2].ravel()]) # Sample at fixed intervals. Used to sample pdfs
 
 
 print('Generating ' + str(len(cat)) + ' KDEs...')
@@ -158,10 +160,11 @@ def make_pdf(ind):
     if ind in progress:
         print('marker:', progress.index(ind),'/10' )
         
-    memb = np.ndarray(shape=(2,cat.prop.loc[ind, 'Ngal']))
+    memb = np.ndarray(shape=(3,cat.prop.loc[ind, 'Ngal']))
 
     memb[0,:] = cat.gal[ind]['vlos']
-    memb[1,:] = cat.gal[ind]['Rproj']# np.sqrt(cat.gal[i]['xproj']**2 + cat.gal[i]['yproj']**2)
+    memb[1,:] = cat.gal[ind]['xproj']
+    memb[2,:] = cat.gal[ind]['yproj']
     
     # initialize a gaussian kde from galaxies
     kde = gaussian_kde(memb, bandwidth)
@@ -183,6 +186,7 @@ else:
     pdfs = np.array(list(map(make_pdf, range(len(cat)) ) ) )
     
 print('KDE generation time:',time.time() - t0,'sec')
+
 
 pdfs = pdfs.astype('float32')
 

@@ -14,7 +14,7 @@ from scipy.stats import gaussian_kde
 
 # ~~~~~~~~~~~~ GENERAL PLOTTING ~~~~~~~~~~~~ 
 
-def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None, func= lambda x: x):
+def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None, c=None, func= lambda x: x):
     """
         Plots a nice histogram
     """
@@ -53,12 +53,12 @@ def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None, func= l
         f, ax = plt.subplots()
     
     if log == 1:
-        ax.semilogy(x,y,label=label)
+        ax.semilogy(x,y,label=label, c=c)
     elif log == 2:
         x = 10.**np.array(x)
-        ax.loglog(x,y,label=label)
+        ax.loglog(x,y,label=label, c=c)
     else:
-        ax.plot(x, y,label=label)
+        ax.plot(x, y,label=label, c=c)
 
     return x,y
 

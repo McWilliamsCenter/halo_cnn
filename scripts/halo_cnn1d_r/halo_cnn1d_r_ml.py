@@ -284,10 +284,6 @@ print('Saving output data\n')
 save_dict = {
     'params'    :   par,
     
-    'sigv_regr' :   sigv_train,
-    'sigv_test' :   sigv_test,
-    
-    'mass_train'   :   y_train,
     'mass_test'    :   y_test,
     'mass_pred'    :   y_pred
 }

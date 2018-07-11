@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
-from keras.layers import Conv1D, MaxPooling1D
+from keras.layers import Conv2D, MaxPooling2D
 from keras.constraints import maxnorm
 from keras.wrappers.scikit_learn import KerasRegressor
 
@@ -32,10 +32,10 @@ import tools.matt_tools as matt
 ## ML PARAMETERS
 par = OrderedDict([ 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
-    ('model_name'   ,   'halo_cnn2d_r'),
+    ('model_name'   ,   'halo_cnn3d_rcyl'),
 
     ('batch_size'   ,   100),
-    ('epochs'       ,   20),
+    ('epochs'       ,   15),
     ('learning'     ,   0.001),
     
     ('norm_output'  ,   True), # If true, train on output [0,1]. Otherwise, train on regular output (e.g. log(M) in [14,15])
@@ -47,13 +47,16 @@ par = OrderedDict([
 
 ## ML Model Declaration
 def baseline_model():
+    """
+    ~~~~~~~~~~~~ TODO ~~~~~~~~~~~~~
+    """
     model = Sequential()
 
-    model.add(Conv1D(32, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Conv2D(32, (5,3), input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
 
-    model.add(Conv1D(32, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
+    model.add(Conv2D(32, (3,3), activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 
-    model.add(MaxPooling1D(pool_size=2))
+    model.add(MaxPooling2D(pool_size=2))
 
     model.add(Dropout(0.25))
     model.add(Flatten())
@@ -89,17 +92,21 @@ log = [int(i.split('_')[-1]) for i in log if (i[:-len(i.split('_')[-1])-1]== par
 par['model_num'] = 0 if len(log)==0 else max(log) + 1
 
 
+
 ## DATA
 print('\n~~~~~ LOADING PROCESSED DATA ~~~~~')
 
-with open(os.path.join(data_path, par['model_name'] + '.p'), 'rb') as f:
+proc_dat_file = os.path.join(data_path, par['model_name'] + '.p')
+
+print('Loading from',proc_dat_file, '...')
+with open(proc_dat_file, 'rb') as f:
     dat_dict = pickle.load(f)
 
 
 # Unpack data
 dat_params = dat_dict['params']
 
-X = dat_dict['pdf'] # vpdf input
+X = dat_dict['pdf'] # pdf input
 Y = dat_dict['mass'] # mass output
 sigv = dat_dict['sigv']
 
@@ -168,8 +175,8 @@ for fold_curr in test_folds:
     # Data augmentation
     print('AUGMENTING TRAIN DATA')
     # flip vlos axis
-    x_train = np.append(x_train, np.flip(x_train,1),axis=0)
-    y_train = np.append(y_train, y_train,axis=0)
+    x_train = np.append(x_train, np.flip(x_train,1), axis=0)
+    y_train = np.append(y_train, y_train, axis=0)
 
     print('# of train: '+str(len(y_train)))
     print('# of test: ' + str(np.sum(in_test)))
@@ -197,6 +204,12 @@ for fold_curr in test_folds:
 
 t1 = time.time()
 print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
+
+
+## MODEL
+print('\n~~~~~ MODEL ~~~~~')
+# print(baseline_model().summary())
+
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
 
 in_train_all = np.sum(fold_assign == 1, axis=1) > 0
@@ -285,7 +298,7 @@ print('Saving output data\n')
 
 save_dict = {
     'params'    :   par,
-
+    
     'mass_test'    :   y_test,
     'mass_pred'    :   y_pred
 }

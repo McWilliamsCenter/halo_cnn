@@ -24,7 +24,7 @@ from tools.catalog import Catalog
 ## PLOT PARAMETERS
 par = OrderedDict([ 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
-    ('model_name'   ,   'halo_cnn2d_r'),
+    ('model_name'   ,   'halo_cnn3d_rcyl'),
 
     ('sdm_file'     ,   'data_raw/UM_0.5_MLv_0_preds.npy'),
     ('pure_cat'     ,   'data_mocks/Rockstar_UM_z=0.117_pure.p'),
@@ -120,7 +120,6 @@ print('regr intercept: ' + str(contam_regr.intercept_))
 
 pure_pred = (np.log10(pure_cat.prop.loc[pure_test, 'sigv']) - pure_regr.intercept_) / pure_regr.coef_
 contam_pred = (np.log10(contam_cat.prop.loc[contam_test, 'sigv']) - contam_regr.intercept_) / contam_regr.coef_
-
 
 # Plotting
 f = plt.figure(figsize=[4,6])
@@ -283,7 +282,9 @@ ax3 = f.add_subplot(gs[2,0]) #, sharex=ax1)
 
 ax3.plot(x_hmf_M200c,y_hmf_M200c, label='theo', c='k')
 
+
 _ = matt.histplot(cnn_dat['mass_test'], n=50, log=1, box=True, label='test', c='r', ax=ax3)
+
 
 ax3.set_ylabel('$dn/d\log(M_{200c})$',fontsize=14)
 ax3.legend(fontsize=8, loc=3)
@@ -298,3 +299,5 @@ plt.tight_layout()
 f.savefig(os.path.join(model_dir, save_model_name + '_pred.pdf'))  
 
 print('All done!')
+
+
