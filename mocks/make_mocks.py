@@ -67,7 +67,7 @@ par = OrderedDict([
     ('min_richness' ,   10),
     
     ('cut_size'     ,   'large'),
-    ('rotations'    ,   13),
+    ('rotations'    ,   15),
     
     ('cosmo' ,   {'H_0': 100, # [km/s/(Mpc/h)]
                   'Omega_m': 0.307115,
@@ -76,7 +76,7 @@ par = OrderedDict([
                  })
     ])
 ## For running
-n_proc = 13
+n_proc = 15
 
 
 ## For debugging
@@ -192,6 +192,82 @@ def cal_v_rel(host_pos, host_v, gal_pos, gal_v, cosmo):
     v_rel = sub_v(v_gal, v_clu, cosmo)
     
     return v_rel
+    
+    
+## ~~~~~ ROTATION FUNCTIONS ~~~~~~
+def rot_matrix_ypr( angles = None):
+    # Generate a rotation matrix from a tuple of rotation angles (yaw, pitch, roll). See https://en.wikipedia.org/wiki/Rotation_matrix
+
+    th_x, th_y, th_z = 2*np.pi*np.random.random(3) if angles is None else angles
+    
+    print('\nAngles: ' + str((th_x,th_y,th_z)))
+
+    R_x = np.array([[1,0,0],
+                    [0, np.cos(th_x), -np.sin(th_x)], 
+                    [0, np.sin(th_x), np.cos(th_x)]]
+                  )
+
+    R_y = np.array([[np.cos(th_y), 0, np.sin(th_y)],
+                    [0, 1, 0],
+                    [-np.sin(th_y), 0, np.cos(th_y)]]
+                  )
+
+    R_z = np.array([[np.cos(th_z), -np.sin(th_z), 0],
+                    [np.sin(th_z), np.cos(th_z), 0],
+                    [0,0,1]]
+                  )
+    R = np.matmul(R_z, R_y, R_x)
+    
+    return R
+
+def rot_matrix_LOS(theta, phi):
+    # Generte a rotation matrix from (theta,phi) as defined on the unit sphere. Transforms the LOS z-axis to the new (theta,phi) coordinates. I did my best to simplify the math. See https://en.wikipedia.org/wiki/Rotation_matrix
+    
+    old_LOS = (0,0,1)
+    new_LOS = (np.cos(phi)*np.sin(theta) ,
+               np.sin(phi) * np.sin(theta),
+               np.cos(theta)
+              )
+              
+    # rotation axis
+    u = np.cross(old_LOS, new_LOS).astype('<f4')
+    u /= np.linalg.norm(u)
+
+    # rotation angle
+    th = np.arccos(np.dot(old_LOS,new_LOS))
+
+    u_cross = np.array([
+        [0, -u[2], u[1]],
+        [u[2], 0, -u[0]],
+        [-u[1], u[0], 0]
+    ])
+
+    R = np.cos(th) * np.identity(3) + \
+        np.sin(th) * u_cross + \
+        (1-np.cos(th))*np.tensordot(u,u, axes=0)
+    
+    return R
+
+def fibonacci_sphere(N=1, randomize=True):
+    # Generate a set of N angles, (theta, phi), 'evenly' distributed on the unit sphere. In truth, it is Fibonacci sphere distributed. See https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere
+    
+    rnd = np.random.rand() * N if randomize else 1.
+        
+    points = []
+    
+    dz = 2./N
+    dphi = np.pi*(3. - np.sqrt(5)) # Golden angle
+    
+    for i in range(N):
+        z = ((i*dz) - 1) + (dz/2.)
+        
+        theta = np.arccos(z)
+        phi = ((i + rnd) % N) * dphi
+        
+        points.append((theta, phi))
+        
+    return points
+
 
 
 t0 = time.time()
@@ -376,30 +452,7 @@ gal_data = gal_data[[i for i in gal_data.columns.values if i not in gal_drop]]
 
 
 ## ~~~~~ CALCULATING ROTATED MOCK OBSERVATIONS ~~~~~~
-def rot_matrix_rand( angles = None):
-    # Generate a rotation matrix from a tuple of rotation angles. See https://en.wikipedia.org/wiki/Rotation_matrix
 
-    th_x, th_y, th_z = 2*np.pi*np.random.random(3) if angles is None else angles
-    
-    print('\nAngles: ' + str((th_x,th_y,th_z)))
-
-    R_x = np.array([[1,0,0],
-                    [0, np.cos(th_x), -np.sin(th_x)], 
-                    [0, np.sin(th_x), np.cos(th_x)]]
-                  )
-
-    R_y = np.array([[np.cos(th_y), 0, np.sin(th_y)],
-                    [0, 1, 0],
-                    [-np.sin(th_y), 0, np.cos(th_y)]]
-                  )
-
-    R_z = np.array([[np.cos(th_z), -np.sin(th_z), 0],
-                    [np.sin(th_z), np.cos(th_z), 0],
-                    [0,0,1]]
-                  )
-    R = np.matmul(R_z, R_y, R_x)
-    
-    return R
 
 def cut_mock( angles = None ):
     """
@@ -407,9 +460,8 @@ def cut_mock( angles = None ):
     
     This is wrapped in a function so it can be parallelized.
     """
-    # print('\nRotating Box')
     
-    R = rot_matrix_rand(angles=angles)
+    R = rot_matrix_LOS(*angles)
 
     gal_pos = pd.DataFrame(np.matmul(gal_data[['x','y','z']].values, R.T),
                            columns=['x','y','z'])
@@ -421,11 +473,9 @@ def cut_mock( angles = None ):
                            columns=['vx','vy','vz'])
 
     # Create KDTree of x,y positions
-    # print('\nInitializing KDTree...')
     gal_tree = KDTree(gal_pos[['x','y']], leafsize=50)
 
-
-    # print('Sampling KDTree...')
+    # Sample KDTree
     pillar_ind = gal_tree.query_ball_point(host_pos[['x','y']], aperture)
     
     
@@ -450,7 +500,6 @@ def cut_mock( angles = None ):
 
 
     for i in range(len(host_data)):
-        if i%(10**4)==0 :print(str(int(i/(10**4))) + ' / ' + str(int(len(host_data)/(10**4) )))
         
         # calculate relative velocities
         v_rel_pillar = cal_v_rel( host_pos.iloc[i]['z'],
@@ -520,16 +569,16 @@ def cut_mock( angles = None ):
 
 print('\nCutting cylinders...')
 
-angle_list = [(0,0,0), (np.pi/2,0,0), (0, np.pi/2, 0)] # Start with 3 orthogonal projections
+angle_list = [(0,0), (np.pi/2,0), (np.pi/2, np.pi/2)] # Start with 3 orthogonal projections
 
 if par['rotations'] > len(angle_list):
     # add more as necessary
-    angle_list += list(2*np.pi*np.random.rand(par['rotations']-len(angle_list),3)) 
+    angle_list = fibonacci_sphere(par['rotations'])
 else:
     # or remove some
     angle_list = angle_list[0:par['rotations']]
 
-with mp.Pool(processes=13) as pool:
+with mp.Pool(processes=n_proc) as pool:
     catalogs = pool.map(cut_mock, angle_list)
                         
 print('Done.')
