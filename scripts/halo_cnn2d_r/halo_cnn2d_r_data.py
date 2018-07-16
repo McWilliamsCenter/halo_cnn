@@ -38,7 +38,7 @@ par = OrderedDict([
     
     ('bandwidth'    ,   0.35), # 'avg_scott'), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
     
-    ('nfolds'       ,   13),
+    ('nfolds'       ,   15),
     ('logm_bin'     ,   0.01),
     ('mbin_frac'    ,   0.008)
 
@@ -124,6 +124,8 @@ if par['bandwidth'] == 'avg_scott':
         return N**(-1./(d+4))
         
     bandwidth = scott_bandwidth(cat.prop['Ngal'].mean(), len(par['shape']))
+    
+    par['bandwidth'] = bandwidth
 else:
     bandwidth = par['bandwidth']
     
@@ -177,7 +179,7 @@ print("KDE's generated.")
 
 print('\n~~~~~ BUILDING OUTPUT ARRAY ~~~~~~')
 dtype = [
-    ('hostid','<i8'), ('logmass', '<f4'), ('in_train', '?'),
+    ('hostid','<i8'), ('logmass', '<f4'), ('Ngal','<i8'), ('in_train', '?'),
     ('in_test', '?'), ('fold', '<i4'), ('pdf', '<f4', par['shape'])
 ]
 
@@ -185,6 +187,7 @@ data = np.ndarray(shape=(len(cat),), dtype=dtype)
 
 data['hostid'] = cat.prop['rockstarId'].values
 data['logmass'] = np.log10(cat.prop['M200c'].values)
+data['Ngal'] = cat.prop['Ngal'].values
 data['in_train'] = in_train
 data['in_test'] = in_test
 data['fold'] = fold
@@ -215,8 +218,6 @@ save_dict = {
 
 with open(os.path.join(model_dir, par['model_name'] + '.p'),'wb') as f:
     pickle.dump(save_dict, f, protocol = pickle.HIGHEST_PROTOCOL)
-
-# np.save(os.path.join(model_dir, par['model_name'] + '.npy'), save_dict, allow_pickle=True)
 
 print('Data saved.')
 

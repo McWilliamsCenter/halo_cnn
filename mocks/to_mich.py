@@ -1,5 +1,7 @@
 
-
+""" 
+Converts Catalog dataset to a .npy file in Michelle's original format.
+"""
 
 
 import sys

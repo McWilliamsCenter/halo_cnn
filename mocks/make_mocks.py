@@ -223,25 +223,26 @@ def rot_matrix_ypr( angles = None):
 def rot_matrix_LOS(theta, phi):
     # Generte a rotation matrix from (theta,phi) as defined on the unit sphere. Transforms the LOS z-axis to the new (theta,phi) coordinates. I did my best to simplify the math. See https://en.wikipedia.org/wiki/Rotation_matrix
     
-    old_LOS = (0,0,1)
-    new_LOS = (np.cos(phi)*np.sin(theta) ,
-               np.sin(phi) * np.sin(theta),
-               np.cos(theta)
+    old_pos = (np.cos(ang[i][1])*np.sin(ang[i][0]) ,
+               np.sin(ang[i][1]) * np.sin(ang[i][0]),
+               np.cos(ang[i][0])
               )
-              
+    new_pos = (0,0,1)
+    
     # rotation axis
-    u = np.cross(old_LOS, new_LOS).astype('<f4')
+    u = np.cross(old_pos, new_pos).astype('<f4')
     u /= np.linalg.norm(u)
 
     # rotation angle
-    th = np.arccos(np.dot(old_LOS,new_LOS))
+    th = np.arccos(np.dot(old_pos,new_pos))
 
     u_cross = np.array([
         [0, -u[2], u[1]],
         [u[2], 0, -u[0]],
         [-u[1], u[0], 0]
     ])
-
+    
+    # rotation matrix
     R = np.cos(th) * np.identity(3) + \
         np.sin(th) * u_cross + \
         (1-np.cos(th))*np.tensordot(u,u, axes=0)
@@ -265,7 +266,9 @@ def fibonacci_sphere(N=1, randomize=True):
         phi = ((i + rnd) % N) * dphi
         
         points.append((theta, phi))
-        
+
+    if randomize: np.random.shuffle(points)
+    
     return points
 
 
