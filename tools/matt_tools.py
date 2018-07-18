@@ -62,7 +62,7 @@ def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None, c=None,
 
     return x,y
 
-def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='', ax = None, c='b', errorbar=False, names=True, log=0):
+def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='', ax = None, c=None, errorbar=False, names=True, log=0):
     """
         Plots a nice 2D distribution of points, binned along the x axis. 
         Percentiles are shown along the y distribution.  
