@@ -30,9 +30,10 @@ par = OrderedDict([
     
     ('nbin'         ,   True)
 ])
-n_proc=10
+n_proc=3
 
 print('\n~~~~~ LOADING CATALOG ~~~~~')
+
 cat = Catalog().load(os.path.join(par['wdir'], par['cat']))
 
 
@@ -45,8 +46,9 @@ data_proc = dict_proc['data']
 
 print('\n~~~~~ REDUCING DATASET ~~~~~')
 data_proc = data_proc[data_proc['in_test']]
-uniq_ids = set(data_proc['hostid'])   
-cat = cat[[i in uniq_ids for i in cat.prop['rockstarId'].values ]]
+uniq_ids = set(data_proc['rockstarId'])
+cat =  cat[[i in uniq_ids for i in cat.prop['rockstarId'].values ]]
+
     
 print('\n~~~~~ CHOOSING CLUSTERS ~~~~~')
 
@@ -86,11 +88,11 @@ mesh = np.mgrid[-cat.par['vcut'] : cat.par['vcut'] : par_proc['shape'][0]*1j,
 sample = np.vstack([mesh[0].ravel(), mesh[1].ravel()]) # Sample at fixed intervals. Used to sample pdfs
 
 meta_dtype = [('rockstarId','<i8'),('log_mass', '<f4'), ('Ngal','<i8'), ('fold','<i4'), ('true_frac','<f4')]
-main_dtype = [('pdfs','<f8', (par['Nkde'], *par_proc['shape'] ) ), ('richs', '<i8', par['Nkde'])]
+main_dtype = [('pdfs','<f8', (par['Nkde'], *par_proc['shape']) ), ('richs', '<i8', par['Nkde'])]
 
 def sample_rich(i_proc):
     
-    rId = data_proc['hostid'][i_proc]
+    rId = data_proc['rockstarId'][i_proc]
     
     print('\nrId:',rId)
     

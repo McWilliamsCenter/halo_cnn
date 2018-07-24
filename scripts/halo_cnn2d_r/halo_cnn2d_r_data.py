@@ -8,9 +8,11 @@ import numpy as np
 import multiprocessing as mp
 import pandas as pd
 import pickle
+import scipy
 
 from collections import OrderedDict
 from scipy.stats import gaussian_kde
+from scipy.integrate import quad
 
 import matplotlib
 matplotlib.use('Agg')
@@ -37,6 +39,7 @@ par = OrderedDict([
     ('shape'        ,   (48,48)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     
     ('bandwidth'    ,   0.35), # 'avg_scott'), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
+    ('margin_theta' ,   True),
     
     ('nfolds'       ,   15),
     ('logm_bin'     ,   0.01),
@@ -44,7 +47,7 @@ par = OrderedDict([
 
 ])
 # For running
-n_proc = 4
+n_proc = 20
 
 
 
@@ -142,22 +145,36 @@ sample = np.vstack([mesh[0].ravel(), mesh[1].ravel()]) # Sample at fixed interva
 
 print('Generating ' + str(len(cat)) + ' KDEs...')
 
-progress = list(np.random.choice(list(range(0,len(cat))),10))
-
 def make_pdf(ind):
-    if ind in progress:
-        print('marker:', progress.index(ind),'/10' )
         
     memb = np.ndarray(shape=(2,cat.prop.loc[ind, 'Ngal']))
-
-    memb[0,:] = cat.gal[ind]['vlos']
-    memb[1,:] = cat.gal[ind]['Rproj']# np.sqrt(cat.gal[i]['xproj']**2 + cat.gal[i]['yproj']**2)
     
-    # initialize a gaussian kde from galaxies
-    kde = gaussian_kde(memb, bandwidth)
+    if par['margin_theta']:
+        memb = np.ndarray(shape=(cat.prop.loc[ind, 'Ngal'],2))
 
-    # sample kde at fixed intervals
-    kdeval = np.reshape(kde(sample).T, mesh[0].shape)
+        memb[:,0] = cat.gal[ind]['vlos']
+        memb[:,1] = cat.gal[ind]['Rproj']
+
+        h_v = bandwidth * memb[:,0].std()
+        h_xy = bandwidth * min(cat.gal[ind]['xproj'].std(), cat.gal[ind]['yproj'].std())
+
+        def f_hat(v,R):
+            #np.sqrt((memb[:,1]**2).sum()/len(memb))*0.9
+            
+            return 1/(len(memb)*h_v*h_xy**2*np.sqrt(2*np.pi))*(np.exp(-(v - memb[:,0])**2 / (2*h_v**2) - (R**2 + memb[:,1]**2)/(2*h_xy**2)) * scipy.special.iv(0, R*memb[:,1]/(h_xy**2) )).sum()
+
+
+        kdeval = np.reshape([f_hat(*x) for x in sample.T], mesh[0].shape)
+        
+    else:
+        memb[0,:] = cat.gal[ind]['vlos']
+        memb[1,:] = cat.gal[ind]['Rproj']# np.sqrt(cat.gal[i]['xproj']**2 + cat.gal[i]['yproj']**2)
+        
+        # initialize a gaussian kde from galaxies
+        kde = gaussian_kde(memb, bandwidth)
+
+        # sample kde at fixed intervals
+        kdeval = np.reshape(kde(sample).T, mesh[0].shape)
 
     # normalize input
     kdeval /= kdeval.sum()
@@ -166,11 +183,14 @@ def make_pdf(ind):
 
 
 t0 = time.time()
+
+import tqdm
 if n_proc > 1:
     with mp.Pool(processes=n_proc) as pool:
-        pdfs = np.array( pool.map(make_pdf, range(len(cat))) )
+        pdfs = np.array(list( tqdm.tqdm(pool.imap(make_pdf, range(len(cat))), total=len(cat)) ))
+
 else:
-    pdfs = np.array(list(map(make_pdf, range(len(cat)) ) ) )
+    pdfs = np.array(list( tqdm.tqdm(map(make_pdf, range(len(cat)) ), total=len(cat)) ) )
     
 print('KDE generation time:',time.time() - t0,'sec')
 
@@ -179,15 +199,16 @@ print("KDE's generated.")
 
 print('\n~~~~~ BUILDING OUTPUT ARRAY ~~~~~~')
 dtype = [
-    ('hostid','<i8'), ('logmass', '<f4'), ('Ngal','<i8'), ('in_train', '?'),
-    ('in_test', '?'), ('fold', '<i4'), ('pdf', '<f4', par['shape'])
+    ('rockstarId','<i8'), ('logmass', '<f4'), ('Ngal','<i8'), ('logsigv','<f4'),
+    ('in_train', '?'), ('in_test', '?'), ('fold', '<i4'), ('pdf', '<f4', par['shape'])
 ]
 
 data = np.ndarray(shape=(len(cat),), dtype=dtype)
 
-data['hostid'] = cat.prop['rockstarId'].values
+data['rockstarId'] = cat.prop['rockstarId'].values
 data['logmass'] = np.log10(cat.prop['M200c'].values)
 data['Ngal'] = cat.prop['Ngal'].values
+data['logsigv'] = np.log10(cat.prop['sigv'].values)
 data['in_train'] = in_train
 data['in_test'] = in_test
 data['fold'] = fold
@@ -217,7 +238,7 @@ save_dict = {
 } 
 
 with open(os.path.join(model_dir, par['model_name'] + '.p'),'wb') as f:
-    pickle.dump(save_dict, f, protocol = pickle.HIGHEST_PROTOCOL)
+    pickle.dump(save_dict, f)
 
 print('Data saved.')
 

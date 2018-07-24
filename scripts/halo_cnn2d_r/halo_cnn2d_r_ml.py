@@ -33,7 +33,7 @@ par = OrderedDict([
 
     ('batch_size'   ,   50),
     ('epochs'       ,   20),
-    ('learning'     ,   0.001),
+    ('learning'     ,   0.00001),
     
     ('validation'   ,   False) # Make a validation set from training data
     
@@ -44,7 +44,7 @@ par = OrderedDict([
 def baseline_model():
     model = Sequential()
 
-    model.add(Conv1D(24, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Conv1D(24, 10, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
 
     model.add(Conv1D(10, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 

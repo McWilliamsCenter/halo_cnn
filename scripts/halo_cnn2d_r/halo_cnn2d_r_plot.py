@@ -25,7 +25,7 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn2d_r'),
 
-    ('sdm_file'     ,   'data_raw/UM_0.5_MLv_0_preds.npy'),
+    ('sdm_file'     ,   'data_raw/MDPL2_0.25_MLv_0_preds.npy'),
     ('pure_cat'     ,   'data_mocks/Rockstar_UM_z=0.117_pure.p'),
     ('contam_cat'   ,   'data_mocks/Rockstar_UM_z=0.117_contam.p'),
     
@@ -269,9 +269,9 @@ matt.binnedplot(np.log10(pure_cat.prop.loc[pure_test, 'M200c']),
 """matt.binnedplot(np.log10(contam_cat.prop.loc[contam_test, 'M200c']),
                 contam_regr_err,
                 n=25, percentiles=[34], median=True, ax=ax2, 
-                label='contam $M(\sigma)$',c='r', errorbar=False, names=False, log=0)
+                label='contam $M(\sigma)$',c='r', errorbar=False, names=False, log=0)"""
 
-matt.binnedplot(sdm_dat[:,1],sdm_err,n=25, percentiles=[34], median=True, ax=ax2, label='sdm',c='g', errorbar=False, names=False, log=0)"""
+matt.binnedplot(sdm_dat[:,1],sdm_err,n=25, percentiles=[34], median=True, ax=ax2, label='sdm',c='g', errorbar=False, names=False, log=0)
 
 matt.binnedplot(cnn_dat['logmass_test'],pred_err,n=25, percentiles=[34], median=True, ax=ax2, label='cnn',c='b', errorbar=False, names=False, log=0)
 

@@ -24,7 +24,7 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn2d_r'),
     
-    ('plot_size'        ,   4),
+    ('plot_size'    ,   4),
     
     ('scale'        ,    'pred')
 ])

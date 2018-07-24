@@ -27,8 +27,8 @@ par = OrderedDict([
     
     ('subsample'    ,   1.0),
     
-    ('nfolds'        ,   10),
-    ('mbin_frac'    ,   1/40.),
+    ('nfolds'       ,   10),
+    ('mbin_frac'    ,   0.008),
     ('logm_bin'     ,   0.01)
 
     ])

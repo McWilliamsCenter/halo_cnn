@@ -87,7 +87,12 @@ else:
 
 # rotations
 if par['rotations'] < (cat.prop['rotation'].max() + 1):
-    cat = cat[ cat.prop.index[cat.prop['rotation'] < par['rotations']].values ]
+    new_rot = np.random.choice(cat.prop['rotation'].unique(), par['rotations'], replace=False).astype(int)
+    
+    cat = cat[ cat.prop.index[cat.prop['rotation'].isin(new_rot) ].values]
+    
+    rot_ser = pd.Series(list(range(len(new_rot))), index = new_rot)
+    cat.prop['rotation'] = rot_ser.loc[cat.prop['rotation']].values
     
     print('new #rotations: ' + str(par['rotations']))
 else:

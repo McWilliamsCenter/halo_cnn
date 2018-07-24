@@ -7,22 +7,14 @@ cd ~/halo_cnn
 
 printf "Generating richness data..."
 
-module load anaconda3
-source activate jupy
+module load AI/anaconda3-5.1.0_gpu
+source activate $AI_ENV
 
-# python ./scripts/halo_cnn2d_r/halo_cnn2d_r_rich_1.py
-
-source deactivate
-module unload anaconda3
+python ./scripts/halo_cnn2d_r/halo_cnn2d_r_rich_1.py
 
 
 printf "\nCalculating richness dependance..."
-module load keras/2.0.6_anaconda
-
-source activate $KERAS_ENV
 
 python ./scripts/halo_cnn2d_r/halo_cnn2d_r_rich_2.py
 
-source deactivate
 
-module unload keras/2.0.6_anaconda
