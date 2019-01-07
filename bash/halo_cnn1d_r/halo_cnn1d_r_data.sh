@@ -7,9 +7,15 @@ cd ~/halo_cnn
 
 printf "Generating data..."
 
-module load python3/intel_3.6.3
+module load anaconda3
+
+source activate jupy
 
 python ./scripts/halo_cnn1d_r/halo_cnn1d_r_data.py
 
-module unload python3/intel_3.6.3
+source deactivate
+
+module unload anaconda3
+
 printf "Data generated.\n"
+

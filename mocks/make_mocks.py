@@ -67,7 +67,11 @@ par = OrderedDict([
     ('min_richness' ,   10),
     
     ('cut_size'     ,   'large'),
-    ('rotations'    ,   15),
+
+    ('dn_dlogm'		,	10.**-5),
+    ('dlogm'		,	0.01),
+    ('boost_minmass',	10**14),
+    ('min_rotations',	3),
     
     ('cosmo' ,   {'H_0': 100, # [km/s/(Mpc/h)]
                   'Omega_m': 0.307115,
@@ -76,8 +80,8 @@ par = OrderedDict([
                  })
     ])
 ## For running
-n_proc = 15
-
+n_proc = 10
+np.random.seed(110101)
 
 ## For debugging
 debug = False
@@ -223,10 +227,9 @@ def rot_matrix_ypr( angles = None):
 def rot_matrix_LOS(theta, phi):
     # Generte a rotation matrix from (theta,phi) as defined on the unit sphere. Transforms the LOS z-axis to the new (theta,phi) coordinates. I did my best to simplify the math. See https://en.wikipedia.org/wiki/Rotation_matrix
     
-    old_pos = (np.cos(ang[i][1])*np.sin(ang[i][0]) ,
-               np.sin(ang[i][1]) * np.sin(ang[i][0]),
-               np.cos(ang[i][0])
-              )
+    if (theta==0)&(phi==0): return np.identity(3)
+
+    old_pos = (np.sin(theta)*np.cos(phi) ,np.sin(theta) * np.sin(phi), np.cos(theta))
     new_pos = (0,0,1)
     
     # rotation axis
@@ -250,8 +253,11 @@ def rot_matrix_LOS(theta, phi):
     return R
 
 def fibonacci_sphere(N=1, randomize=True):
-    # Generate a set of N angles, (theta, phi), 'evenly' distributed on the unit sphere. In truth, it is Fibonacci sphere distributed. See https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere
+    # Generate a set of N angles, (theta, phi), 'evenly' distributed on the unit sphere. 
+    # In truth, it is Fibonacci-sphere distributed. See https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere
     
+    if N<1: return []
+
     rnd = np.random.rand() * N if randomize else 1.
         
     points = []
@@ -294,7 +300,7 @@ gal_data = gal_data[gal_data['upid']!=-1]
 
 if debug:
     host_data = host_data.sample(10**4)
-    gal_data = gal_data.sample(10**5)
+    gal_data = gal_data.sample(10**6)
 
 host_data = host_data.reset_index(drop=True)
 gal_data = gal_data.reset_index(drop=True)
@@ -350,6 +356,7 @@ _ = pad_regions.remove((None,None,None))
 
 axes = ('x','y','z')
 
+"""
 def in_pad_region(key):
     # Assign to padding regions. To be used in multiprocessing
     p_region = []
@@ -371,9 +378,21 @@ def in_pad_region(key):
             p_region.append(i)
             
     return p_region
+"""
+def in_pad_region(key):
+    # Assign to padding regions. To be used in multiprocessing
+    out = np.ones(shape=(len(gal_data), len(axes)))
+
+    for j in range(len(key)):
+        if key[j] == True:
+            out[:,j] = (gal_data[axes[j]] < pad_size)
+        elif key[j]==False:
+            out[:,j] = (gal_data[axes[j]] > (box_length-pad_size))
+
+    return np.argwhere(np.sum(out,axis=1)==len(axes)).flatten()
 
 with mp.Pool(processes= n_proc) as pool:
-    to_pad_ind = pool.map(in_pad_region, pad_regions) # each process checks a different padding region
+    to_pad_ind = pool.map(in_pad_region, pad_regions, chunksize=1) # each process checks a different padding region
 
 print('Padding regions: ')
 for i in range(len(pad_regions)):
@@ -424,25 +443,34 @@ print('Padded gal_data length: ' + str(len(gal_data)))
 
 ## ~~~~~ REASSIGNING TRUE MEMBERs ~~~~~~
 """
-Host-galaxy relationships might take place over a periodic boundary. Therefore, we must check if any padded copies of galaxies are closer to their respective hosts than the original galaxies
+Host-galaxy relationships might take place over a periodic boundary. 
+Therefore, we must check if any padded copies of galaxies are closer to 
+their respective hosts than the original galaxies
 """
 
+def reassign_true(host_i):
+    host_pos = host_data.iloc[host_i][['x','y','z']]
+    host_mem = host_members[host_data.at[host_i, 'rockstarId']]
+    
+    for j in range(len(host_mem)):
+        true_memb_dist = np.sqrt(np.sum((gal_data.iloc[host_mem[j]][['x','y','z']] - host_pos)**2))
+        if (true_memb_dist > host_data.at[host_i, 'Rvir']/1000.) & \
+           (len(pad_gal_copies[host_mem[j]])>0):
+            close_gal = np.sqrt(np.sum( (gal_data.iloc[ pad_gal_copies[host_mem[j]] ][['x','y','z']] - \
+                                         host_pos)**2, axis=1)).idxmin()
+            
+            if np.sqrt(np.sum((gal_data.iloc[close_gal][['x','y','z']] - host_pos)**2)) < true_memb_dist:
+                host_mem[j] = close_gal
+
+    return host_mem
+
 print('\nReassigning true members to account for padding...')
+with mp.Pool(processes= n_proc) as pool:
+    reassignments = pool.map(reassign_true, range(len(host_data))) # each process checks a different padding region
+
 for i in range(len(host_data)):
     if i%(10**4)==0 :print(str(int(i/(10**4))) + ' / ' + str(int(len(host_data)/(10**4) )))
-    
-    host_rId = host_data.at[i, 'rockstarId']
-    host_rad = host_data.at[i, 'Rvir']/1000.
-    host_pos = host_data.iloc[i][['x','y','z']]
-    
-    for j in range(len(host_members[host_rId])):
-        true_memb_dist = np.sqrt(np.sum((gal_data.iloc[host_members[host_rId][j]][['x','y','z']] - host_pos)**2))
-        if true_memb_dist > host_rad:
-            if host_members[host_rId][j] in pad_gal_copies:
-                close_gal = np.sqrt(np.sum( (gal_data.iloc[ pad_gal_copies[host_members[host_rId][j]] ][['x','y','z']] - host_pos)**2, axis=1)).idxmin()
-                
-                if np.sqrt(np.sum((gal_data.iloc[close_gal][['x','y','z']] - host_pos)**2)) < true_memb_dist:
-                    host_members[host_rId][j] = close_gal
+    host_members[host_data.at[i, 'rockstarId']] = reassignments[i]
         
 
 print('\nReducing dataset...') # Dropping unnecessary data fields
@@ -454,17 +482,69 @@ host_data = host_data[[i for i in host_data.columns.values if i not in host_drop
 gal_data = gal_data[[i for i in gal_data.columns.values if i not in gal_drop]]
 
 
+## ~~~~~ CALCULATING BOOSTED ROTATION ANGLES ~~~~~~
+print('Calculating boosted rotation angles...')
+
+host_rots = pd.DataFrame(0, index=host_data.index, columns=['M200c','num_rot'])
+
+host_rots.loc[:,'M200c'] = np.log10(host_data['M200c'])
+host_rots.loc[:,'num_rot'] = 0
+
+host_rots = host_rots.sort_values(by='M200c')
+
+start = np.argwhere(host_rots['M200c']>np.log10(par['boost_minmass'])).min()
+
+chunks = np.linspace(start, len(host_rots), n_proc+1)
+chunks = [(int(chunks[i]), int(chunks[i+1])) for i in range(len(chunks)-1)]
+
+def num_rot(chunk):
+    out = [0]*(chunk[1]-chunk[0])
+    for i in range(chunk[0], chunk[1]):
+        window = [0,1]
+        while (host_rots['M200c'].iloc[window[0]] < host_rots['M200c'].iloc[i] - par['dlogm']/2.):
+            window[0]+=1
+        while (window[1]<len(host_rots)):
+            if (host_rots['M200c'].iloc[window[1]] >= host_rots['M200c'].iloc[i] + par['dlogm']/2.):
+                break
+            window[1]+=1
+
+        i_dn_dlogm = (window[1]-window[0])/1000**3/par['dlogm']
+        
+        out[i-chunk[0]] = int(par['dn_dlogm']/i_dn_dlogm)+1 #fix
+
+    return out
+
+with mp.Pool(processes= n_proc) as pool:
+    chunk_out = pool.map(num_rot, chunks) # each process checks a different padding region
+    
+print('Setting chunks')
+for i in range(len(chunk_out)):
+    print(i, '/', len(chunk_out))
+    host_rots.iloc[chunks[i][0]:chunks[i][1], host_rots.columns.get_loc('num_rot')] = chunk_out[i]
+
+host_rots.iloc[np.argwhere(host_rots['num_rot']<par['min_rotations']), 
+               host_rots.columns.get_loc('num_rot')] = par['min_rotations'] #fix
+
+rot_assign = pd.DataFrame(True, index=host_rots.index, 
+						  columns=[(0,0), (np.pi/2,0), (np.pi/2, np.pi/2)])
+
+for n_rot in host_rots['num_rot'].unique():
+	ang_list = fibonacci_sphere(n_rot - par['min_rotations'])
+
+	for ang in ang_list:
+		rot_assign[ang] = host_rots['num_rot']==n_rot
+
+print('# Rotations:' + str(host_rots['num_rot'].unique()))
+
 ## ~~~~~ CALCULATING ROTATED MOCK OBSERVATIONS ~~~~~~
 
-
-def cut_mock( angles = None ):
+def cut_mock( angle = None ):
     """
     Given a set of rotation angles, rotate catalog. Iterate through clusters. Cut a long cylinder through the entire sim around projected cluster center (called pillars). Calculate all vlos. Create pure, contaminated catalogs. 
     
     This is wrapped in a function so it can be parallelized.
     """
-    
-    R = rot_matrix_LOS(*angles)
+    R = rot_matrix_LOS(*angle)
 
     gal_pos = pd.DataFrame(np.matmul(gal_data[['x','y','z']].values, R.T),
                            columns=['x','y','z'])
@@ -474,6 +554,10 @@ def cut_mock( angles = None ):
                            columns=['x','y','z'])
     host_v = pd.DataFrame(np.matmul(host_data[['vx','vy','vz']].values, R.T),
                            columns=['vx','vy','vz'])
+
+    if gal_pos.isnull().values.any():
+    	print(angle)
+    	print(R)
 
     # Create KDTree of x,y positions
     gal_tree = KDTree(gal_pos[['x','y']], leafsize=50)
@@ -501,10 +585,9 @@ def cut_mock( angles = None ):
                 ]
     gal_index = gal_data.index.to_series()
 
-
-    for i in range(len(host_data)):
+    for i in rot_assign.index.values[rot_assign[angle]]: # for each cluster
         
-        # calculate relative velocities
+        # calculate all relative velocities in a pillar around the cluster center
         v_rel_pillar = cal_v_rel( host_pos.iloc[i]['z'],
                                   host_v.iloc[i]['vz'],
                                   gal_pos['z'].iloc[pillar_ind[i]],
@@ -566,23 +649,21 @@ def cut_mock( angles = None ):
 
     pure_catalog.prop = pure_catalog.prop.iloc[pure_ind]
     contam_catalog.prop = contam_catalog.prop.iloc[contam_ind]
+
+    del gal_pos
+    del gal_v
+    del host_pos
+    del host_v
+
+    print('Finished ' + str(angle))
     
     return (pure_catalog, contam_catalog)
 
 
 print('\nCutting cylinders...')
 
-angle_list = [(0,0), (np.pi/2,0), (np.pi/2, np.pi/2)] # Start with 3 orthogonal projections
-
-if par['rotations'] > len(angle_list):
-    # add more as necessary
-    angle_list = fibonacci_sphere(par['rotations'])
-else:
-    # or remove some
-    angle_list = angle_list[0:par['rotations']]
-
 with mp.Pool(processes=n_proc) as pool:
-    catalogs = pool.map(cut_mock, angle_list)
+    catalogs = pool.map(cut_mock, rot_assign.columns.values, chunksize=1)
                         
 print('Done.')
 
@@ -590,9 +671,9 @@ pure_len = 0
 contam_len = 0
 
 for i in range(len(catalogs)):
-    print('\nRotation #' + str(i))
-    print('pure len: ' + str(len(catalogs[i][0].prop)))
-    print('contam len: ' + str(len(catalogs[i][1].prop)))
+    # print('\nRotation #' + str(i))
+    # print('pure len: ' + str(len(catalogs[i][0].prop)))
+    # print('contam len: ' + str(len(catalogs[i][1].prop)))
     
     pure_len += len(catalogs[i][0].prop)
     contam_len += len(catalogs[i][1].prop)

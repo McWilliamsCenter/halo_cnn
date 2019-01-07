@@ -23,13 +23,13 @@ par = OrderedDict([
     ('out_folder'   ,   'data_mocks'),
     
     ('in_file'      ,   'Rockstar_UM_z=0.117_contam.p'),
-    ('out_file'     ,   'Rockstar_UM_z=0.117_contam_rot10.p'),
+    ('out_file'     ,   'Rockstar_UM_z=0.117_contam_med.p'),
     
     ('min_mass'     ,   10**(13.5)),
     ('min_richness' ,   10),
     
-    ('cut_size'     ,   'large'),
-    ('rotations'    ,   10),
+    ('cut_size'     ,   'medium'),
+    ('rotations'    ,   None),
 
     ])
     
@@ -86,7 +86,9 @@ else:
     
 
 # rotations
-if par['rotations'] < (cat.prop['rotation'].max() + 1):
+if par['rotations'] == None:
+    print('#rotations unchanged')
+elif par['rotations'] < (cat.prop['rotation'].max() + 1):
     new_rot = np.random.choice(cat.prop['rotation'].unique(), par['rotations'], replace=False).astype(int)
     
     cat = cat[ cat.prop.index[cat.prop['rotation'].isin(new_rot) ].values]
@@ -109,7 +111,7 @@ recalc_stat = False
 if (cat.par['aperture'] is None) | (aperture < cat.par['aperture']):
     print('Changing aperature...')
     for i in range(len(cat)):
-        if i%int(len(cat)/100) == 0: print(i, '/100')
+        if i%int(len(cat)/100) == 0: print(i/int(len(cat)/100) , '/100')
         
         cat.gal[i] = cat.gal[i][cat.gal[i]['Rproj'] < aperture]
         
@@ -120,7 +122,7 @@ if (cat.par['aperture'] is None) | (aperture < cat.par['aperture']):
     
     recalc_stat = True
     
-    print('new aperture: ' + str(cat.par['aperature']))
+    print('new aperture: ' + str(cat.par['aperture']))
 else:
     print('aperture unchanged')
     
@@ -128,7 +130,7 @@ else:
 if (cat.par['vcut'] is None) | (vcut < cat.par['vcut']):
     print('Changing vcut...')
     for i in range(len(cat)):
-        if i%int(len(cat)/100) == 0: print(i, '/100')
+        if i%int(len(cat)/100) == 0: print(i/int(len(cat)/100) , '/100')
         
         cat.gal[i] = cat.gal[i][np.abs(cat.gal[i]['vlos']) < vcut]
         

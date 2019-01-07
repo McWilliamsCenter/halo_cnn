@@ -7,8 +7,10 @@ cd ~/halo_cnn
 
 
 printf "\nPlotting..."
-module load python3/intel_3.6.3
+module load anaconda3
+source activate jupy
 
 python ./scripts/halo_cnn2d_r/halo_cnn2d_r_plot.py
 
-module unload python3/intel_3.6.3
+source deactivate
+module unload anaconda3

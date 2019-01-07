@@ -28,7 +28,7 @@ z:      0.0     0.022   0.045   0.069   0.093   0.117   0.142   0.168   0.194
 """
 
 save_dir = '/home/mho1/scratch/halo_cnn/data_query'
-snapnum = 120
+snapnum = 117
 Macc_min = '1e11'
 cache = True# Store query locally
 
@@ -37,7 +37,7 @@ subset_dir = os.path.join(save_dir, 'subsets')
 if not os.path.isdir(os.path.join(subset_dir)):
     os.makedirs(subset_dir)
 
-query_name =  'MDPL2_Rockstar_' + 'snap:' + str(snapnum) + '_v3'
+query_name =  'MDPL2_Rockstar_' + 'snap:' + str(snapnum) + ''
 
 print('\n')
 print('~~~~~ Quering ' + query_name + '~~~~~\n')

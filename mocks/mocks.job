@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -p RM
+#SBATCH -p RM-shared
 
 #SBATCH -t 24:00:00
 #SBATCH -N 1

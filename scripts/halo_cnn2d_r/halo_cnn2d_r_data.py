@@ -12,7 +12,6 @@ import scipy
 
 from collections import OrderedDict
 from scipy.stats import gaussian_kde
-from scipy.integrate import quad
 
 import matplotlib
 matplotlib.use('Agg')
@@ -32,19 +31,21 @@ par = OrderedDict([
     ('in_folder'    ,   'data_mocks'),
     ('out_folder'   ,   'data_processed'),
     
-    ('data_file'    ,   'Rockstar_UM_z=0.117_contam.p'),
+    ('data_file'    ,   'Rockstar_UM_z=0.117_contam_med.p'),
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
     ('shape'        ,   (48,48)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled 
     
     ('bandwidth'    ,   0.35), # 'avg_scott'), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
-    ('margin_theta' ,   True),
+    ('margin_theta' ,   False),
     
-    ('nfolds'       ,   15),
-    ('logm_bin'     ,   0.01),
-    ('mbin_frac'    ,   0.008)
-
+    ('nfolds'       ,   10),
+    
+    ('test_range'   ,   (10**13.9, 10**15.1)),
+    
+    ('dn_dlogm'		,	10.**-5.2),
+    ('dlogm'		,	0.02)
 ])
 # For running
 n_proc = 20
@@ -90,18 +91,20 @@ in_train = np.array([False]*len(cat))
 in_test = np.array([False]*len(cat))
 
 log_m = np.log10(cat.prop['M200c'])
-bin_edges = np.arange(log_m.min() * 0.9999, (log_m.max() + par['logm_bin'])*1.0001, par['logm_bin'])
-n_per_bin = int(par['mbin_frac']*len(log_m)/len(bin_edges))
+bin_edges = np.arange(log_m.min() * 0.9999, (log_m.max() + par['dlogm'])*1.0001, par['dlogm'])
+n_per_bin = int(par['dn_dlogm']*1000**3*par['dlogm'])
 
 for j in range(len(bin_edges)):
-    bin_ind = log_m.index[ (log_m >= bin_edges[j])&(log_m < bin_edges[j]+par['logm_bin']) ].values
+    bin_ind = log_m.index[ (log_m >= bin_edges[j])&(log_m < bin_edges[j]+par['dlogm']) ].values
     
     if len(bin_ind) <= n_per_bin:
         in_train[bin_ind] = True # Assign train members
     else:
         in_train[np.random.choice(bin_ind, n_per_bin, replace=False)] = True
 
-in_test[cat.prop.index[cat.prop['rotation'] < 3].values] = True
+in_test[cat.prop.index[(cat.prop['rotation'] < 3) & 
+        (cat.prop['M200c'] > par['test_range'][0]) &
+        (cat.prop['M200c'] < par['test_range'][1])].values] = True
 
 
 print('\n~~~~~ REMOVING UNUSED DATA ~~~~~')
@@ -113,11 +116,17 @@ in_test = in_test[keep]
 
 
 print('\n~~~~~ ASSIGNING FOLDS ~~~~~~')
+# Use rank-ordering to assign folds evenly for all masses
 
-fold_ind = pd.Series(np.random.randint(0, par['nfolds'], len(cat.prop['rockstarId'].unique())), 
-                  index = cat.prop['rockstarId'].unique())
+ids_massSorted = cat.prop[['rockstarId','M200c']].drop_duplicates().sort_values(['M200c','rockstarId'])['rockstarId']
+
+fold_ind = pd.Series(np.arange(len(ids_massSorted)) % par['nfolds'], 
+                     index = ids_massSorted)
 
 fold = fold_ind[cat.prop['rockstarId']].values
+
+for i in range(par['nfolds']):
+    print('Fold #' + str(i) + ' --> train:' + str(np.sum(in_train[fold!=i])) + ' test:' + str(np.sum(in_test[fold==i])) )
 
 
 print('\n~~~~~ PREPROCESSING DATA ~~~~~~')
@@ -136,11 +145,13 @@ print('bandwidth:', bandwidth)
 
 # Generate input data
 print('\nGenerate input data')
+v_pos = np.linspace(-cat.par['vcut'], cat.par['vcut'], par['shape'][0] + 1)
+a_pos = np.linspace(0, cat.par['aperture'], par['shape'][1] + 1)
+v_pos = [np.mean(v_pos[[i,i+1]]) for i in range(len(v_pos)-1)]
+a_pos = [np.mean(a_pos[[i,i+1]]) for i in range(len(a_pos)-1)]
 
-mesh = np.mgrid[-cat.par['vcut'] : cat.par['vcut'] : par['shape'][0]*1j,
-                0 : cat.par['aperture'] : par['shape'][1]*1j               
-                ]
-
+mesh = np.meshgrid(a_pos,v_pos)
+mesh = np.flip(mesh,0)
 sample = np.vstack([mesh[0].ravel(), mesh[1].ravel()]) # Sample at fixed intervals. Used to sample pdfs
 
 print('Generating ' + str(len(cat)) + ' KDEs...')
@@ -193,6 +204,7 @@ else:
     pdfs = np.array(list( tqdm.tqdm(map(make_pdf, range(len(cat)) ), total=len(cat)) ) )
     
 print('KDE generation time:',time.time() - t0,'sec')
+print('Average generation time:', (time.time()-t0)/len(pdfs),'sec')
 
 print("KDE's generated.")
 
@@ -265,12 +277,12 @@ mass_train = data['logmass'][data['in_train']]
 mass_test = data['logmass'][data['in_test']]
 
 if (len(mass_train) > 0) & (len(mass_test)>0):
-    _ = matt.histplot(  mass_train, n=75, log=1, box=True,
+    _ = matt.histplot(  mass_train, n=100, log=1, box=True,
                         label='train', ax=ax)
-    _ = matt.histplot(  mass_test, n=75, log=1, box=True,
+    _ = matt.histplot(  mass_test, n=100, log=1, box=True,
                         label='test', ax=ax)
 
-plt.xlim(mass_test.min(), mass_test.max())
+plt.xlim(mass_train.min(), mass_train.max())
 
 plt.xlabel('$\log(M_{200c})$', fontsize=16)
 plt.ylabel('$dn/d\log(M_{200c})$', fontsize=16)

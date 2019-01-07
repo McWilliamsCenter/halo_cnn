@@ -7,13 +7,13 @@ cd ~/halo_cnn
 
 printf "Generating data..."
 
-module load anaconda3
+module load anaconda5
 source activate jupy
 
 python ./scripts/halo_cnn2d_r/halo_cnn2d_r_data.py
 
 source deactivate
-module unload anaconda3
+module unload anaconda5
 printf "Data generated.\n"
 
 
@@ -29,6 +29,18 @@ source deactivate
 
 module unload keras/2.0.6_anaconda
 
+
+printf "Running M(sigma) regression..."
+
+module load anaconda5
+
+source activate jupy
+
+python ./scripts/halo_cnn2d_r/halo_cnn2d_r_regr.py
+
+source deactivate
+
+module unload anaconda5
 
 
 printf "\nPlotting..."

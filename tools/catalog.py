@@ -5,6 +5,7 @@ This is a module to define the Cluster and Catalog classes. These classes make i
 ## ~~~~~ IMPORTS ~~~~~~
 import pickle
 from numpy import ndarray
+import pandas as pd
 
 ## ~~~~~ CLASS DEFINITIONS ~~~~~~
 class Cluster:

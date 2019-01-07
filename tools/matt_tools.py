@@ -62,7 +62,10 @@ def histplot(X,n=10, label=None, log=0, norm = False, box=False,ax=None, c=None,
 
     return x,y
 
-def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='', ax = None, c=None, errorbar=False, names=True, log=0):
+def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, 
+               label='', ax = None, c=None, lw = 1, errorbar=False, 
+               names=True, log=0, linestyle='-', err_lines=False, alpha=0.4,
+               repl_nan=-1):
     """
         Plots a nice 2D distribution of points, binned along the x axis. 
         Percentiles are shown along the y distribution.  
@@ -115,6 +118,7 @@ def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='',
             y_median.append(np.median(bindata))
         
         y_p = np.percentile(bindata,calc_percent)
+        if repl_nan is not None: y_p[np.isnan(y_p)] = repl_nan
         y_percent = np.append(y_percent, [y_p],axis=0)
         
         y_std.append(bindata.std())
@@ -128,9 +132,9 @@ def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='',
 
     if log==1:
         if mean: 
-            ax.semilogy(x_incr,y_mean, label=label+names*'mean',color='g')
+            ax.semilogy(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
         if median: 
-            ax.semilogy(x_incr,y_median, label=label+names*'median',color=c)
+            ax.semilogy(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
     elif log==2:
         x_incr = 10**np.array(x_incr)
         y_mean = 10**np.array(y_mean)
@@ -139,14 +143,14 @@ def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='',
         
         
         if mean: 
-            ax.loglog(x_incr,y_mean, label=label+names*'mean',color='g')
+            ax.loglog(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
         if median: 
-            ax.loglog(x_incr,y_median, label=label+names*'median',color=c)
+            ax.loglog(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
     else:
         if mean: 
-            ax.plot(x_incr,y_mean, label=label+names*'mean',color='g')
+            ax.plot(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
         if median: 
-            ax.plot(x_incr,y_median, label=label+names*'median',color=c)
+            ax.plot(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
             
     for i in range(len(percentiles)):
                         
@@ -155,7 +159,14 @@ def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False, label='',
                             y_percent[2*i+1], 
                             label=names*label+names*str(int(percentiles[i]*2)) + names*'pct',
                             zorder=order_percent[i],
-                            color=c, alpha=(0.4/(i+1)), linewidth=2)
+                            color=c, alpha=(alpha/(i+1)))
+            if err_lines==True:
+                ax.plot(x_incr, y_percent[2*i],
+                        label=names*label+names*str(int(percentiles[i]*2)) + names*'pct',
+                        color=c, alpha=(2*alpha/(i+1)), linestyle=linestyle)
+                ax.plot(x_incr, y_percent[2*i+1],
+                        label=names*label+names*str(int(percentiles[i]*2)) + names*'pct',
+                        color=c, alpha=(2*alpha/(i+1)), linestyle=linestyle)
         else:
             ax.errorbar(x_incr, y_median, yerr=np.abs(y_percent[0:2]-y_median),
                      color=c, label=label, fmt='.')

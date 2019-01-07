@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH -p LM
+
+#SBATCH -t 8:00:00
+#SBATCH --mem=3000gb
+#SBATCH -e /home/mho1/scratch/halo_cnn/oe/%j.oe
+#SBATCH -o /home/mho1/scratch/halo_cnn/oe/%j.oe
+
+cd /home/mho1/halo_cnn/
+
+printf "Running SDM Rich..."
+
+module load anaconda
+source activate jupy
+
+python ./sdm/halo_sdm2d_rich.py
+printf "Done.\n"
+
+source deactivate
+module unload anaconda

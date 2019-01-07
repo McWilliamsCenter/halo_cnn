@@ -17,6 +17,7 @@ import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv1D, MaxPooling1D
+from keras.layers import Conv2D, MaxPooling2D
 from keras.constraints import maxnorm
 from keras.wrappers.scikit_learn import KerasRegressor
 
@@ -31,9 +32,9 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn2d_r'),
 
-    ('batch_size'   ,   50),
+    ('batch_size'   ,   100),
     ('epochs'       ,   20),
-    ('learning'     ,   0.00001),
+    ('learning'     ,   0.001),
     
     ('validation'   ,   False) # Make a validation set from training data
     
@@ -44,11 +45,11 @@ par = OrderedDict([
 def baseline_model():
     model = Sequential()
 
-    model.add(Conv1D(24, 10, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Conv1D(24, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
 
     model.add(Conv1D(10, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 
-    model.add(MaxPooling1D(pool_size=2))
+    model.add(MaxPooling1D(pool_size=4))
 
     model.add(Dropout(0.25))
     model.add(Flatten())
@@ -103,7 +104,7 @@ par['logmass_max'] = Y.max()
 
 Y -= par['logmass_min']
 Y /= (par['logmass_max'] - par['logmass_min'])
-
+# Y = 2*Y - 1
 
 par['nfolds'] = data['fold'].max()+ 1 
 
@@ -113,6 +114,7 @@ print('\n~~~~~ TRAINING ~~~~~')
 Y_pred = np.zeros(len(Y))
 hist_all = []
 model_all = []
+temp_eval_time = []
 
 t0 = time.time()
 
@@ -171,18 +173,30 @@ for fold_curr in test_folds:
     np.put( Y_pred, 
             np.where(in_test), 
             model.predict(X[in_test]))
+
+    temp = X[in_test]
+    t_temp0 = time.time()
+    temp = model.predict(temp)
+    t_temp1 = time.time()
+    eval_time = (t_temp1-t_temp0)/np.sum(in_test)
+    temp_eval_time.append(eval_time)
+
+    print('eval_time: ', eval_time)
+
     
     hist_all.append(hist)
     model_all.append(model)
 
 t1 = time.time()
 print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
+print('\nAverage evaluation time: ', np.mean(temp_eval_time), 'seconds')
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
 
 
 y_test = (par['logmass_max'] - par['logmass_min'])*Y[data['in_test']] + par['logmass_min']
-
 y_pred= (par['logmass_max'] - par['logmass_min'])*Y_pred[data['in_test']] + par['logmass_min']
+# y_test = Y[data['in_test']]
+# y_pred = Y_pred[data['in_test']]
     
 y_test = y_test.flatten()
 y_pred = y_pred.flatten()
@@ -232,25 +246,33 @@ for i in range(len(test_folds)):
     model_all[i].save(model_path)
 #print('Saved trained model at %s ' % model_path)
 
+print('~~~~~ SAVING LOSS CURVES ~~~~~')
+loss_dat = np.zeros(shape=(len(test_folds), par['epochs']), dtype = [('train','<f4'), ('val','<f4')] )
+
+loss_dat['train'] = np.array([hist_all[i].history['loss'] for i in range(len(test_folds)) ])
+if par['validation']==True: loss_dat['val'] = np.array([hist_all[i].history['val_loss'] for i in range(len(test_folds)) ])
+
+np.save(os.path.join(model_dir, model_name_save + '_loss.npy'), loss_dat)
+
 
 print('~~~~~ PLOTTING ~~~~~')
 
-f = plt.figure(figsize=[5,5])
+f = plt.figure(figsize=[3,3])
 
-for i in range(len(test_folds)):
+for i in [0]:#range(len(test_folds)):
     plt.plot(   hist_all[i].history['loss'],
-                label=str(test_folds[i]) + ' loss',
+                label='training',
                 linewidth=3)
                 
     if par['validation']==True:
         plt.plot(   hist_all[i].history['val_loss'],
-                    label=str(test_folds[i]) + ' val_loss',
+                    label='validation',
                     linewidth=3)
     
 
 plt.legend(fontsize=12)
-plt.xlabel('Epochs ',fontsize=16)
-plt.ylabel('Loss',fontsize=16)
+plt.xlabel('Epochs ',fontsize=12)
+plt.ylabel('Loss',fontsize=12)
 plt.tight_layout()
 f.savefig(os.path.join(model_dir, model_name_save + '_loss.pdf'))
 
@@ -260,7 +282,7 @@ print('Saved training figures\n')
 
 
 
-print('Saving output data\n')
+print('~~~~~ SAVING OUTPUT DATA ~~~~~')
 
 
 save_dict = {

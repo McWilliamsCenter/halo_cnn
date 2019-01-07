@@ -2,7 +2,7 @@
 Workspace for applying Convolutional Neural Networks to galaxy cluster mass measurements
 
 ## Project is under development
-I'm planning to use this git repository just for my own use. Mostly to help with version control. Also to take advantage of McWilliams Center private repositories :)
+I am currently in the process of formalizing code for publication. This involves commenting, formatting, and cleaning up this repository. Stay tuned!
 
 ## ML Pipeline
 Given a model_name,

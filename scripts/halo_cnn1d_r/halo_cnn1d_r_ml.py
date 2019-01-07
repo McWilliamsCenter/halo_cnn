@@ -4,10 +4,9 @@
 import sys
 import os
 import numpy as np
-import numpy.lib.recfunctions as nprf
-from sklearn import linear_model
-from scipy.stats import gaussian_kde
 import time
+import pickle
+
 from collections import OrderedDict
 
 import matplotlib as mpl
@@ -32,14 +31,11 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn1d_r'),
 
-    ('batch_size'   ,   100),
-    ('epochs'       ,   50),
+    ('batch_size'   ,   50),
+    ('epochs'       ,   20),
     ('learning'     ,   0.001),
-    
-    ('norm_output'  ,   True), # If true, train on output [0,1]. Otherwise, train on regular output (e.g. log(M) in [14,15])
-    
+
     ('validation'   ,   False), # Make a validation set from training data
-    ('crossfold'    ,   True) # Use crossfold validation
 ])
 
 
@@ -48,9 +44,9 @@ def baseline_model():
     model = Sequential()
 
     # """ CONV LAYER 1
-    model.add(Conv1D(32, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Conv1D(10, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
 
-    model.add(Conv1D(32, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
+    model.add(Conv1D(5, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 
     model.add(MaxPooling1D(pool_size=2))
 
@@ -70,66 +66,51 @@ def baseline_model():
     
     return model
 
-
-
-## FILE SPECIFICATION
-
-data_path = os.path.join(par['wdir'], 'data_processed', par['model_name'])
-save_dir = os.path.join(par['wdir'], 'saved_models', par['model_name'])
-
-if not os.path.isdir(save_dir):
-    os.makedirs(save_dir)
-
-# Assign most recent model number
-log = os.listdir(save_dir)
-
-log = [int(i.split('_')[-1]) for i in log if (i[:-len(i.split('_')[-1])-1]== par['model_name'])]
-
-par['model_num'] = 0 if len(log)==0 else max(log) + 1
+print('\n~~~~~ MODEL PARAMETERS ~~~~~')
+for key in par.keys():
+    print(key, ':', str(par[key]))
 
 
 ## DATA
 print('\n~~~~~ LOADING PROCESSED DATA ~~~~~')
 
-dat_dict = np.load(os.path.join(data_path, par['model_name'] + '.npy'), encoding='latin1').item()
+data_path = os.path.join(par['wdir'], 'data_processed', par['model_name'])
+with open(os.path.join(data_path, par['model_name'] + '.p'), 'rb') as f:
+    data_dict = pickle.load(f)
 
 # Unpack data
-dat_params = dat_dict['params']
+data_params = data_dict['params']
+data = data_dict['data']
 
-X = dat_dict['pdf'] # vpdf input
-Y = dat_dict['mass'] # mass output
-sigv = dat_dict['sigv']
-
-fold_assign = dat_dict['fold_assign']
+X = data['pdf'] # pdf input
+Y = data['logmass'] # mass output
 
 
 print('Data loaded succesfully')
 
-dat_params.update(par)
-par = dat_params
+data_params.update(par)
+par = data_params
 
 
 print('\n~~~~~ PREPARING X,Y ~~~~~')
 X = np.reshape(X, list(X.shape) + [1])
 
-Y_min = Y.min()
-Y_max = Y.max()
+par['logmass_min'] = Y.min()
+par['logmass_max'] = Y.max()
 
-if par['norm_output']:
-    Y -= Y_min
-    Y /= (Y_max - Y_min)
 
-par['mass_max'] = Y_max
-par['mass_min'] = Y_min
+Y -= par['logmass_min']
+Y /= (par['logmass_max'] - par['logmass_min'])
 
-par['nfolds'] = fold_assign.shape[1]
+
+par['nfolds'] = data['fold'].max()+ 1 
 
 test_folds = np.arange(par['nfolds'])
 
-
 print('\n~~~~~ TRAINING ~~~~~')
-y_pred = np.zeros(len(fold_assign))
+Y_pred = np.zeros(len(Y))
 hist_all = []
+model_all = []
 
 t0 = time.time()
 
@@ -137,8 +118,8 @@ for fold_curr in test_folds:
     
     # Find relevant clusters in fold
     print('\n~~~~~ TEST FOLD #' + str(fold_curr) + ' ~~~~~\n')
-    in_train = fold_assign[:, fold_curr] == 1
-    in_test = fold_assign[:, fold_curr] == 2
+    in_train = data['in_train'] & (data['fold'] != fold_curr)
+    in_test = data['in_test'] & (data['fold'] == fold_curr)
     
     # Create train, test samples
     print('\nGENERATING TRAIN/TEST DATA')
@@ -185,40 +166,40 @@ for fold_curr in test_folds:
                       shuffle=True,
                       verbose=2)
                       
-    np.put( y_pred, 
+    np.put( Y_pred, 
             np.where(in_test), 
             model.predict(X[in_test]))
     
     hist_all.append(hist)
+    model_all.append(model)
 
 t1 = time.time()
 print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
 
 
-in_train_all = np.sum(fold_assign == 1, axis=1) > 0
-in_test_all = np.sum(fold_assign == 2, axis=1) > 0
+y_test = (par['logmass_max'] - par['logmass_min'])*Y[data['in_test']] + par['logmass_min']
 
-
-sigv_train = sigv[in_train==1]
-sigv_test = sigv[in_test_all==1]
-
-if par['norm_output']:
-    y_train = (Y_max - Y_min)*Y[in_train==1] + Y_min
-    y_test = (Y_max - Y_min)*Y[in_test_all==1] + Y_min
+y_pred= (par['logmass_max'] - par['logmass_min'])*Y_pred[data['in_test']] + par['logmass_min']
     
-    y_pred= (Y_max - Y_min)*y_pred[in_test_all==1] + Y_min
-else:
-    y_train = Y[in_train==1]
-    y_test = Y[in_test_all==1]
-    
-    y_pred = y_pred[in_test_all==1]
-    
-
-y_train = y_train.flatten()
 y_test = y_test.flatten()
 y_pred = y_pred.flatten()
 
+
+print('~~~~~ FILE SPECIFICATION ~~~~~')
+## FILE SPECIFICATION
+
+save_dir = os.path.join(par['wdir'], 'saved_models', par['model_name'])
+
+if not os.path.isdir(save_dir):
+    os.makedirs(save_dir)
+
+# Assign most recent model number
+log = os.listdir(save_dir)
+
+log = [int(i.split('_')[-1]) for i in log if (i[:-len(i.split('_')[-1])-1]== par['model_name'])]
+
+par['model_num'] = 0 if len(log)==0 else max(log) + 1
 
 
 print('~~~~~ SAVING PARAMETERS ~~~~~')
@@ -226,13 +207,11 @@ print('~~~~~ SAVING PARAMETERS ~~~~~')
 model_name_save = par['model_name'] + '_' + str(par['model_num'])
 
 model_dir = os.path.join(save_dir, model_name_save)
-dat_dir = os.path.join(save_dir, 'model_data')
+model_fold_dir = os.path.join(save_dir, model_name_save,'models')
 
 if not os.path.isdir(model_dir):
     os.makedirs(model_dir)
-
-if not os.path.isdir(dat_dir):
-    os.makedirs(dat_dir)
+    os.makedirs(model_fold_dir)
 
 with open(os.path.join(model_dir, 'parameters.txt'), 'w') as param_file:
     param_file.write('\n~~~ DATA, ML PARAMETERS ~~~ \n\n')
@@ -245,30 +224,36 @@ with open(os.path.join(model_dir, 'parameters.txt'), 'w') as param_file:
     
     param_file.write('\n\n')
 
+print('~~~~~ SAVING MODELS ~~~~~')
+for i in range(len(test_folds)):
+    model_path = os.path.join(model_fold_dir, 'fold_' + str(i) + '.h5')
+    model_all[i].save(model_path)
+#print('Saved trained model at %s ' % model_path)
 
-# model_path = os.path.join(model_dir, model_name_save + '.h5')
-# model.save(model_path)
-# print('Saved trained model at %s ' % model_path)
+print('~~~~~ SAVING LOSS CURVES ~~~~~')
+loss_dat = np.zeros(shape=(len(test_folds), par['epochs']), dtype = [('train','<f4'), ('val','<f4')] )
 
+loss_dat['train'] = np.array([hist_all[i].history['loss'] for i in range(len(test_folds)) ])
+if par['validation']==True: loss_dat['val'] = np.array([hist_all[i].history['val_loss'] for i in range(len(test_folds)) ])
+
+np.save(os.path.join(model_dir, model_name_save + '_loss.npy'), loss_dat)
 
 print('~~~~~ PLOTTING ~~~~~')
 
-f = plt.figure(figsize=[5,5])
+f = plt.figure(figsize=[3,3])
 
-for i in range(len(test_folds)):
+for i in [0]:#range(len(test_folds)):
     plt.plot(   hist_all[i].history['loss'],
-                label=str(test_folds[i]) + ' loss',
-                linewidth=3)
+                label='training')
                 
     if par['validation']==True:
         plt.plot(   hist_all[i].history['val_loss'],
-                    label=str(test_folds[i]) + ' val_loss',
-                    linewidth=3)
+                    label='validation')
     
 
-plt.legend(fontsize=12)
-plt.xlabel('Epochs ',fontsize=16)
-plt.ylabel('Loss',fontsize=16)
+plt.legend(fontsize=8)
+plt.xlabel('Epochs ',fontsize=10)
+plt.ylabel('Loss',fontsize=10)
 plt.tight_layout()
 f.savefig(os.path.join(model_dir, model_name_save + '_loss.pdf'))
 
@@ -283,12 +268,12 @@ print('Saving output data\n')
 
 save_dict = {
     'params'    :   par,
-    
-    'mass_test'    :   y_test,
-    'mass_pred'    :   y_pred
+
+    'logmass_test'    :   y_test,
+    'logmass_pred'    :   y_pred
 }
 
-np.save(os.path.join(dat_dir, model_name_save + '.npy'), save_dict)
+np.save(os.path.join(model_dir, model_name_save + '.npy'), save_dict)
 
 print('Output data saved.')
 
@@ -299,3 +284,4 @@ print('Output data saved.')
 
 
 print('All finished!')
+

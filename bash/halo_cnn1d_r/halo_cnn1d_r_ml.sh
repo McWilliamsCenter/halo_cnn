@@ -5,8 +5,6 @@ cd ~/halo_cnn
 #interact -p GPU-shared --gres=gpu:p100:1 -t 02:00:00
 #interact --ntasks-per-node=27 -t 02:00:00
 
-
-
 printf "\nRunning ML..."
 module load keras/2.0.6_anaconda
 
