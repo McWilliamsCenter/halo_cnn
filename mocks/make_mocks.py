@@ -17,7 +17,7 @@ This code is used to generate a mock catalog from MDPL2 Rockstar data. The main 
     4. Reassign true members to hosts which are close to the edges of the box. The padded galaxies might be closer to the host center than the originals.
     
     5. Cut cylinders
-        a. Rotate the box randomly. All x,y,z and vx,vy,vz data of hosts and galaxies will be multiplied by a rotation matrix R. The following steps will run in parallel for each rotated box.
+        a. Rotate the box randomly. All x,y,z and vx,vy,vz data of hosts and galaxies are transformed by a rotation matrix R. The following steps will run in parallel for each rotated box.
         b. Initialize a kd-tree along the (rotated) x,y positions of galaxies.
         c. Iterate through all hosts and identify all galaxies within [aperature] of the host center along x,y positions.
         d. For each of these galaxies, calculate relative LOS velocity to the cluster.
@@ -66,7 +66,8 @@ par = OrderedDict([
     ('min_mass'     ,   10**(13.5)),
     ('min_richness' ,   10),
     
-    ('cut_size'     ,   'large'),
+    ('cut_size'     ,   'medium'),
+    ('true_members' ,   'vir'), # vir or FOF
 
     ('dn_dlogm'		,	10.**-5),
     ('dlogm'		,	0.01),
@@ -81,13 +82,13 @@ par = OrderedDict([
     ])
 ## For running
 n_proc = 10
-np.random.seed(110101)
+np.random.seed(693201)
 
 ## For debugging
-debug = False
+debug = True
 
 if debug:
-    print('\n>>>>>DEBUGGING<<<<<')
+    print('\n'+20*'>'+' DEBUGGING '+20*'<')
     par['min_richness']=2
     
 ## ~~~~~ PARAMETER HANDLING ~~~~~
@@ -299,8 +300,8 @@ host_data = host_data[  (host_data['upId']==-1) &
 gal_data = gal_data[gal_data['upid']!=-1]
 
 if debug:
-    host_data = host_data.sample(10**4)
-    gal_data = gal_data.sample(10**6)
+    host_data = host_data.sample(int(10**3.5), replace=False)
+    gal_data = gal_data.sample(int(10**5.5), replace=False)
 
 host_data = host_data.reset_index(drop=True)
 gal_data = gal_data.reset_index(drop=True)
@@ -544,8 +545,20 @@ def cut_mock( angle = None ):
     
     This is wrapped in a function so it can be parallelized.
     """
+    
+    ## ~~~~~ rotate galaxy-host positions+velocities ~~~~~
     R = rot_matrix_LOS(*angle)
 
+    gal_rot = pd.DataFrame(np.concatenate((np.matmul(gal_data[['x','y','z']].values, R.T),
+                                           np.matmul(gal_data[['vx','vy','vz']].values, R.T)),
+                                          axis=1),
+                           columns=['x','y','z','vx','vy','vz'])
+    host_rot = pd.DataFrame(np.concatenate((np.matmul(host_data[['x','y','z']].values, R.T),
+                                            np.matmul(host_data[['vx','vy','vz']].values, R.T)),
+                                           axis=1),
+                            columns=['x','y','z','vx','vy','vz'])
+
+    """
     gal_pos = pd.DataFrame(np.matmul(gal_data[['x','y','z']].values, R.T),
                            columns=['x','y','z'])
     gal_v = pd.DataFrame(np.matmul(gal_data[['vx','vy','vz']].values, R.T),
@@ -554,107 +567,166 @@ def cut_mock( angle = None ):
                            columns=['x','y','z'])
     host_v = pd.DataFrame(np.matmul(host_data[['vx','vy','vz']].values, R.T),
                            columns=['vx','vy','vz'])
+    """
 
-    if gal_pos.isnull().values.any():
-    	print(angle)
-    	print(R)
-
-    # Create KDTree of x,y positions
-    gal_tree = KDTree(gal_pos[['x','y']], leafsize=50)
-
-    # Sample KDTree
-    pillar_ind = gal_tree.query_ball_point(host_pos[['x','y']], aperture)
+    ## ~~~~~ initialize projected and 3D KDTrees ~~~~~
+    gal_tree_proj = KDTree(gal_rot[['x','y']], leafsize=50)
+    gal_tree_full = KDTree(gal_rot[['x','y','z']], leafsize=50)
     
+
     
-    # Initialize catalogs
+    ## ~~~~~ initialize catalogs ~~~~~
+    # empty catalog files
     pure_catalog = Catalog(prop = host_data,
                            gal = []
-                          )
+                          ) 
     contam_catalog = Catalog(prop=host_data,
                              gal=[]
                             )
+
+    # record which clusters were successfully measured
     pure_ind = []
     contam_ind = []
 
-    gal_dtype = [ ('xproj','<f8'),
+    # output member galaxy information
+    dtype_gal = [ ('xproj','<f8'),
                   ('yproj','<f8'),
+                  ('zproj','<f8'),
                   ('Rproj','<f8'),
                   ('vlos', '<f8'),
-                  ('true_memb','?'),
-                  ('mvir','<f8')
+                  ('memb_FOF','?'),
+                  ('memb_vir','?'),
+                  #('mvir','<f8')
                 ]
-    gal_index = gal_data.index.to_series()
+    # gal_index = gal_data.index.to_series()
+    
+    
+    ## ~~~~~ iterate through hosts, assign member galaxies, calculate observables ~~~~~
 
     for i in rot_assign.index.values[rot_assign[angle]]: # for each cluster
+    
+        # Grab galaxy members as assigned by FOF algo    
+        mem_FOF_ind = host_members[host_data.loc[i,'rockstarId']]
+    
+        # Sample KDTree to find potential projected and virial members
+        mem_proj_ind = gal_tree_proj.query_ball_point(host_rot.loc[i,['x','y']], aperture)
+        mem_vir_ind = gal_tree_full.query_ball_point( host_rot.loc[i,['x','y','z']], 
+                                                      host_data.loc[i,'Rvir']/1000)
         
-        # calculate all relative velocities in a pillar around the cluster center
-        v_rel_pillar = cal_v_rel( host_pos.iloc[i]['z'],
-                                  host_v.iloc[i]['vz'],
-                                  gal_pos['z'].iloc[pillar_ind[i]],
-                                  gal_v['vz'].iloc[pillar_ind[i]],
-                                  cosmo)
+        # calculate relative velocities of all potential projected members
+        v_rel_proj = cal_v_rel( host_rot.loc[i,'z'],
+                                host_rot.loc[i,'vz'],
+                                gal_rot.loc[mem_proj_ind,'z'],
+                                gal_rot.loc[mem_proj_ind,'vz'],
+                                cosmo)
                                   
+        # restrict projected member list to those with |v_los|<v_cut
+        v_rel_proj = v_rel_proj[np.abs(v_rel_proj) < vcut]
+        mem_proj_ind = v_rel_proj.index.to_series()
 
-        obs_members_v_rel = v_rel_pillar[np.abs(v_rel_pillar) < vcut]
+        # identify true members for pure catalog
+        if par['true_members']=='FOF':
+            mem_true_ind = mem_FOF_ind
+        elif par['true_members']=='vir':
+            mem_true_ind = mem_vir_ind
+        else:
+            raise Exception('Unknown true member assignment scheme: '+str(par['true_members']))
         
-        true_members = host_members[host_data.iloc[i]['rockstarId']]
+        
+        # ~~~~~~~~ START EDIT FROM HERE ~~~~~~~~~~~~~
         
         # contaminated catalog   
-        if len(obs_members_v_rel) > par['min_richness']:
-            clu_gals = np.zeros(shape=(len(obs_members_v_rel)),
-                                dtype = gal_dtype)
-                                
-            obs_members_index = obs_members_v_rel.index.to_series()
+        if len(mem_proj_ind) > par['min_richness']:
+
+            # initialize array of output member galaxy information
+            clu_gals = np.zeros(shape=(len(mem_proj_ind)),
+                                dtype = dtype_gal)
             
-            clu_gals['xproj'] = gal_pos['x'].loc[obs_members_index] - host_pos.iloc[i]['x']
-            clu_gals['yproj'] = gal_pos['y'].loc[obs_members_index] - host_pos.iloc[i]['y']
+            # assign relevant information
+            #clu_gals[['xproj','yproj','zproj']] = gal_rot.loc[mem_proj_ind,['x','y','z']] - \
+            #                                      host_rot.loc[i,['x','y','z']]
+            clu_gals['xproj'] = gal_rot.loc[mem_proj_ind,'x'] - host_rot.loc[i,'x']
+            clu_gals['yproj'] = gal_rot.loc[mem_proj_ind,'y'] - host_rot.loc[i,'y']
+            clu_gals['zproj'] = gal_rot.loc[mem_proj_ind,'z'] - host_rot.loc[i,'z']
             clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
+
+            clu_gals['vlos'] = v_rel_proj
+
+            clu_gals['memb_FOF'] = [x in mem_FOF_ind for x in mem_proj_ind]
+            clu_gals['memb_vir'] = [x in mem_vir_ind for x in mem_proj_ind]
+            # clu_gals['mvir'] = gal_data['mvir'].loc[obs_members_index]
+
+            """
+            clu_gals['yproj'] = gal_pos['y'].loc[obs_members_index] - host_pos.iloc[i]['y']
+            clu_gals['zproj'] = gal_pos['z'].loc[obs_members_index] - host_pos.iloc[i]['z']
+            clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
+            """
             
-            clu_gals['vlos'] = obs_members_v_rel
-            clu_gals['true_memb'] = [x in true_members
-                                     for x in obs_members_index
-                                    ]
-            clu_gals['mvir'] = gal_data['mvir'].loc[obs_members_index]
-            
+            # append output galaxy information to catalog
             contam_catalog.gal.append(clu_gals)
             contam_ind.append(i)                          
         
         
         
         # pure catalog
-        if len(true_members) > par['min_richness']:
-            true_members_out_of_pillar = [j for j in true_members if j not in pillar_ind[i]]
-            
-            v_rel_out_of_pillar = cal_v_rel( host_pos.iloc[i]['z'],
-                                             host_v.iloc[i]['vz'],
-                                             gal_pos['z'].iloc[true_members_out_of_pillar],
-                                             gal_v['vz'].iloc[true_members_out_of_pillar],
-                                             cosmo)
-                                             
-            v_rel = v_rel_pillar.append(v_rel_out_of_pillar)
+        if len(mem_true_ind) > par['min_richness']:
 
-            clu_gals = np.zeros(shape=(len(true_members)),
-                                dtype = gal_dtype)
+            # calculate v_los for true members which may not fall in projected cylinder
+            mem_truenotproj_ind = [j for j in mem_true_ind if j not in mem_proj_ind]
             
+            v_rel_truenotproj = cal_v_rel( host_rot.loc[i,'z'],
+                                           host_rot.loc[i,'vz'],
+                                           gal_rot.loc[mem_truenotproj_ind,'z'],
+                                           gal_rot.loc[mem_truenotproj_ind, 'vz'],
+                                           cosmo)
+                     
+            v_rel_true = v_rel_proj.append(v_rel_truenotproj)[mem_true_ind]
+
+            # initialize array of output member galaxy information
+            clu_gals = np.zeros(shape=(len(mem_true_ind)),
+                                dtype = dtype_gal)
+            
+            # assign relevant information
+            # clu_gals[['xproj','yproj','zproj']] = gal_rot.loc[mem_true_ind,['x','y','z']] - \
+            #                                       host_rot.loc[i,['x','y','z']]
+            clu_gals['xproj'] = gal_rot.loc[mem_true_ind,'x'] - host_rot.loc[i,'x']
+            clu_gals['yproj'] = gal_rot.loc[mem_true_ind,'y'] - host_rot.loc[i,'y']
+            clu_gals['zproj'] = gal_rot.loc[mem_true_ind,'z'] - host_rot.loc[i,'z']
+            clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
+            
+            clu_gals['vlos'] = v_rel_true
+            # clu_gals['mvir'] = gal_data['mvir'].loc[true_members]
+
+            if par['true_members']=='FOF':
+                clu_gals['memb_FOF'] = True
+                clu_gals['memb_vir'] = [x in mem_vir_ind for x in mem_true_ind]
+            elif par['true_members']=='vir':
+                clu_gals['memb_FOF'] = [x in mem_FOF_ind for x in mem_true_ind]
+                clu_gals['memb_vir'] = True
+            """
             clu_gals['xproj'] = gal_pos['x'].iloc[true_members] - host_pos.iloc[i]['x']
             clu_gals['yproj'] = gal_pos['y'].iloc[true_members] - host_pos.iloc[i]['y']
+            clu_gals['zproj'] = gal_pos['z'].iloc[true_members] - host_pos.iloc[i]['z']
+            
             clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
             
             clu_gals['vlos'] = v_rel.loc[gal_index.iloc[true_members]]
             clu_gals['true_memb'] = True
             clu_gals['mvir'] = gal_data['mvir'].loc[true_members]
-            
+            """
+            # append output galaxy information to catalog
             pure_catalog.gal.append(clu_gals)
             pure_ind.append(i)
 
+    # restrict output catalogs to only correctly calulated clusters (e.g. above min_richness)
     pure_catalog.prop = pure_catalog.prop.iloc[pure_ind]
     contam_catalog.prop = contam_catalog.prop.iloc[contam_ind]
 
-    del gal_pos
-    del gal_v
-    del host_pos
-    del host_v
+    # delete unnecessary data
+    del gal_rot
+    del host_rot
 
+    # output and return
     print('Finished ' + str(angle))
     
     return (pure_catalog, contam_catalog)

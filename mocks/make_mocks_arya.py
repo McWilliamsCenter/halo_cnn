@@ -599,6 +599,7 @@ def cut_mock( angle = None ):
 
     gal_dtype = [ ('xproj','<f8'),
                   ('yproj','<f8'),
+                  ('zproj','<f8'),
                   ('Rproj','<f8'),
                   ('vlos', '<f8'),
                   ('true_memb','?'),
@@ -629,6 +630,7 @@ def cut_mock( angle = None ):
             
             clu_gals['xproj'] = gal_pos['x'].loc[obs_members_index] - host_pos.iloc[i]['x']
             clu_gals['yproj'] = gal_pos['y'].loc[obs_members_index] - host_pos.iloc[i]['y']
+            clu_gals['zproj'] = gal_pos['z'].loc[obs_members_index] - host_pos.iloc[i]['z']
             clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
             
             clu_gals['vlos'] = obs_members_v_rel
@@ -659,6 +661,7 @@ def cut_mock( angle = None ):
             
             clu_gals['xproj'] = gal_pos['x'].iloc[true_members] - host_pos.iloc[i]['x']
             clu_gals['yproj'] = gal_pos['y'].iloc[true_members] - host_pos.iloc[i]['y']
+            clu_gals['zproj'] = gal_pos['z'].iloc[true_members] - host_pos.iloc[i]['z']
             clu_gals['Rproj'] = np.sqrt(clu_gals['xproj']**2 + clu_gals['yproj']**2)
             
             clu_gals['vlos'] = v_rel.loc[gal_index.iloc[true_members]]
