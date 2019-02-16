@@ -32,7 +32,7 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn2d_r'),
 
-    ('batch_size'   ,   100),
+    ('batch_size'   ,   50),
     ('epochs'       ,   20),
     ('learning'     ,   0.001),
     

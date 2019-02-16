@@ -37,7 +37,7 @@ par = OrderedDict([
     
     ('shape'        ,   (48,)), # Length of a cluster's ML input array. # of times velocity pdf will be sampled
     
-    ('bandwidth'    ,   0.35), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
+    ('bandwidth'    ,   0.25), # bandwidth used for gaussian kde. Can be scalar, 'scott','silverman', or 'avg_scott'
     
     ('nfolds'       ,   10 ),
     

@@ -118,7 +118,7 @@ def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False,
             y_median.append(np.median(bindata))
         
         y_p = np.percentile(bindata,calc_percent)
-        if repl_nan is not None: y_p[np.isnan(y_p)] = repl_nan
+        if repl_nan is not None: y_p[~np.isfinite(y_p)] = repl_nan
         y_percent = np.append(y_percent, [y_p],axis=0)
         
         y_std.append(bindata.std())
