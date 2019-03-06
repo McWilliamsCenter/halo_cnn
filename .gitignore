@@ -10,6 +10,9 @@ Thumbs.db
 
 # Directories #
 paper_images/
+notebooks/.ipynb_checkpoints
+old/
 
 # python files #
 .pyc
+.cpython-36.pyc

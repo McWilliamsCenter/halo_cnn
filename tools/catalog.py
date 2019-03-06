@@ -42,7 +42,7 @@ class Catalog:
         print('Saving as npy: ' + filename)
         max_ngal = self.prop['Ngal'].max()
 
-        dtype = [(x,'f') for x in self.prop.columns.values]
+        dtype = [(x,'float64') for x in self.prop.columns.values]
         dtype += [('gal_'+x[0],x[1],max_ngal) for x in self.gal[0].dtype.descr]
         
         out = np.zeros(shape=(len(self),), dtype=dtype)
@@ -55,7 +55,7 @@ class Catalog:
         for i in range(len(self)):
             for f in self.gal[0].dtype.names:
                 out[i]['gal_'+f][:int(out[i]['Ngal'])] = self.gal[i][f]
-                
+        
         print('Parameters not transferred:')
         print(self.par)
                 
