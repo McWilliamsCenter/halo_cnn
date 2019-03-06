@@ -5,14 +5,14 @@
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --mem=40GB
-#SBATCH -e /home/mho1/scratch/halo_cnn/%j.oe
-#SBATCH -o /home/mho1/scratch/halo_cnn/%j.oe
+#SBATCH -e /home/mho1/scratch/jobout/%j.oe
+#SBATCH -o /home/mho1/scratch/jobout/%j.oe
 
 cd /home/mho1/halo_cnn/
 
 source activate jupy
 
-python ./mocks/make_mocks_evan.py
+python ./mocks/custom_mocks/make_mocks_evan.py
 
 source deactivate
 

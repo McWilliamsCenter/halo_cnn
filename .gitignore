@@ -13,6 +13,7 @@ Thumbs.db
 paper_images/
 notebooks/.ipynb_checkpoints
 old/
+tools/__pycache__/
 
 # python files #
 .pyc

@@ -56,9 +56,9 @@ from tools.catalog import Catalog
 par = OrderedDict([ 
     ('catalog_name' ,   'Rockstar_UM_z=0.117'),
     
-    ('wdir'         ,   '/home/mho1/scratch/halo_cnn'),
-    ('in_folder'    ,   'data'),
-    ('out_folder'   ,   'data_mocks'),
+    ('wdir'         ,   '/home/mho1/scratch'),
+    ('in_folder'    ,   'halo_cnn/data_query'),
+    ('out_folder'   ,   'evan'),
     
     ('host_file'    ,   'MDPL2_Rockstar_snap:120_v3.csv'),
     ('gal_file'     ,   'sfr_catalog_0.895100.npy'),
@@ -309,7 +309,7 @@ if debug:
     gal_data = gal_data.sample(int(10**5.5), replace=False)
 
 
-with open(os.path.join(par['wdir'], par['in_folder'], 'HaloIDs_LargeCyl.txt'),'r') as f:
+with open(os.path.join(par['wdir'], par['out_folder'], 'HaloIDs_LargeCyl.txt'),'r') as f:
 	cool_hosts = [int(i) for i in f.read().split('\n') if len(i)>0]
 
 host_data = host_data[host_data['rockstarId'].isin(cool_hosts)]
