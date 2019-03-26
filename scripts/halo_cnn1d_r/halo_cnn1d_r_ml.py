@@ -48,7 +48,7 @@ def baseline_model():
 
     model.add(Conv1D(5, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 
-    model.add(MaxPooling1D(pool_size=2))
+    # model.add(MaxPooling1D(pool_size=2))
 
     model.add(Dropout(0.25))
     model.add(Flatten())

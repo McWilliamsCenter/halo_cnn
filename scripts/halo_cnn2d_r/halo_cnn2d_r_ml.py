@@ -49,7 +49,7 @@ def baseline_model():
 
     model.add(Conv1D(10, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 
-    model.add(MaxPooling1D(pool_size=4))
+    # model.add(MaxPooling1D(pool_size=4))
 
     model.add(Dropout(0.25))
     model.add(Flatten())
@@ -118,7 +118,7 @@ temp_eval_time = []
 
 t0 = time.time()
 
-for fold_curr in test_folds:
+for fold_curr in test_folds[:1]:
     
     # Find relevant clusters in fold
     print('\n~~~~~ TEST FOLD #' + str(fold_curr) + ' ~~~~~\n')
