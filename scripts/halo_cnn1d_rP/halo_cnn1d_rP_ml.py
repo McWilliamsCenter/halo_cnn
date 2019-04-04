@@ -29,15 +29,17 @@ import tools.matt_tools as matt
 ## ML PARAMETERS
 par = OrderedDict([ 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
-    ('model_name'   ,   'halo_cnn1d_r'),
+    ('model_name'   ,   'halo_cnn1d_rP'),
 
     ('logM_range'   ,   (13., 16.)), # None
+    
+    ('nbins'        ,   10),
 
     ('batch_size'   ,   50),
-    ('epochs'       ,   20),
+    ('epochs'       ,   50),
     ('learning'     ,   0.001),
 
-    ('validation'   ,   False), # Make a validation set from training data
+    ('validation'   ,   True), # Make a validation set from training data
 ])
 
 
@@ -58,15 +60,33 @@ def baseline_model():
     model.add(Dense(128,  activation='relu', kernel_constraint=maxnorm(3)))
     model.add(Dense(64,  activation='relu', kernel_constraint=maxnorm(3)))
     
-    model.add(Dense(1))
+    model.add(Dense(par['nbins'], activation='softmax'))
 
     opt = keras.optimizers.adam(lr=par['learning'], decay=1e-6)
 
-    model.compile(loss='mean_squared_error',
+    model.compile(loss='categorical_crossentropy',
                   optimizer=opt,
                   metrics=[])
     
     return model
+
+# Managing posterior model output
+bin_edges = np.linspace(0, 1, par['nbins']+1)
+def y_to_bins(y_point):
+    y_binned = np.zeros(shape=(len(y_point), par['nbins']), dtype=int)
+
+    for i in range(par['nbins']):
+        y_binned[:,i] = (y_point >= bin_edges[i]) & (y_point <= bin_edges[i+1])
+        
+    return y_binned
+
+
+bin_centers = [np.mean((bin_edges[i],bin_edges[i+1])) for i in range(par['nbins'])]
+def bins_to_y(y_binned):
+    y_point = np.dot(y_binned, bin_centers)
+    
+    return y_point
+
 
 print('\n~~~~~ MODEL PARAMETERS ~~~~~')
 for key in par.keys():
@@ -107,7 +127,6 @@ else:
 
 Y -= par['logmass_min']
 Y /= (par['logmass_max'] - par['logmass_min'])
-Y = 2*Y - 1
 
 
 par['nfolds'] = data['fold'].max()+ 1 
@@ -115,7 +134,7 @@ par['nfolds'] = data['fold'].max()+ 1
 test_folds = np.arange(par['nfolds'])
 
 print('\n~~~~~ TRAINING ~~~~~')
-Y_pred = np.zeros(len(Y))
+Y_pred = np.zeros(shape=(len(Y),))
 hist_all = []
 model_all = []
 
@@ -158,6 +177,12 @@ for fold_curr in test_folds:
     print('# of train: '+str(len(y_train)))
     print('# of test: ' + str(np.sum(in_test)))
 
+
+    # Convert to binned posterior
+    print('\nCONVERTING TO BINNED POSTERIOR')
+    y_train = y_to_bins(y_train)
+    y_val = y_to_bins(y_val)
+    
     ## MODEL
     print ('\nINITIALIZING MODEL')
 
@@ -175,7 +200,7 @@ for fold_curr in test_folds:
                       
     np.put( Y_pred, 
             np.where(in_test), 
-            model.predict(X[in_test]))
+            bins_to_y(model.predict(X[in_test])) )
     
     hist_all.append(hist)
     model_all.append(model)
@@ -183,9 +208,6 @@ for fold_curr in test_folds:
 t1 = time.time()
 print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
-
-Y = (Y+1.)/2.
-Y_pred = (Y_pred + 1.)/2.
 
 y_test = (par['logmass_max'] - par['logmass_min'])*Y[data['in_test']] + par['logmass_min']
 

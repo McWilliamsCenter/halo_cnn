@@ -32,6 +32,8 @@ par = OrderedDict([
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
     ('model_name'   ,   'halo_cnn2d_r'),
 
+    ('logM_range'   ,   (13., 16.)), # None
+
     ('batch_size'   ,   50),
     ('epochs'       ,   20),
     ('learning'     ,   0.001),
@@ -98,13 +100,16 @@ par = data_params
 print('\n~~~~~ PREPARING X,Y ~~~~~')
 # X = np.reshape(X, list(X.shape) + [1])
 
-par['logmass_min'] = Y.min()
-par['logmass_max'] = Y.max()
-
+if par['logM_range']==None:
+    par['logmass_min'] = Y.min()
+    par['logmass_max'] = Y.max()
+else:
+    par['logmass_min'] = par['logM_range'][0]
+    par['logmass_max'] = par['logM_range'][1]
 
 Y -= par['logmass_min']
 Y /= (par['logmass_max'] - par['logmass_min'])
-# Y = 2*Y - 1
+Y = 2*Y - 1
 
 par['nfolds'] = data['fold'].max()+ 1 
 
@@ -118,7 +123,7 @@ temp_eval_time = []
 
 t0 = time.time()
 
-for fold_curr in test_folds[:1]:
+for fold_curr in test_folds:
     
     # Find relevant clusters in fold
     print('\n~~~~~ TEST FOLD #' + str(fold_curr) + ' ~~~~~\n')
@@ -192,6 +197,8 @@ print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
 print('\nAverage evaluation time: ', np.mean(temp_eval_time), 'seconds')
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
 
+Y = (Y+1.)/2.
+Y_pred = (Y_pred + 1.)/2.
 
 y_test = (par['logmass_max'] - par['logmass_min'])*Y[data['in_test']] + par['logmass_min']
 y_pred= (par['logmass_max'] - par['logmass_min'])*Y_pred[data['in_test']] + par['logmass_min']

@@ -23,7 +23,7 @@ from tools.catalog import Catalog
 ## PLOT PARAMETERS
 par = OrderedDict([ 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
-    ('model_name'   ,   'halo_cnn2d_r'),
+    ('model_name'   ,   'halo_cnn1d_rP'),
 
     ('sdm_file'     ,   'data_raw/MDPL2_0.25_MLv_0_preds.npy'),
     ('pure_cat'     ,   'data_mocks/Rockstar_UM_z=0.117_pure.p'),
@@ -114,12 +114,12 @@ f.savefig(os.path.join(model_dir, save_model_name+ '_sdm.pdf'))
 
 print('\n~~~~~ CALCULATING MASS ERROR ~~~~~')
 
-pred_err = cnn_dat['logmass_pred']-cnn_dat['logmass_test']
-sdm_err = sdm_dat[:,0]-sdm_dat[:,1]
+pred_err = (10.**cnn_dat['logmass_pred'])/(10.**cnn_dat['logmass_test']) - 1.
+sdm_err = (10.**sdm_dat[:,0])/(10.**sdm_dat[:,1]) - 1.
 
-pure_regr_err = pure_regr_pred['logmass_pred'][pure_regr_pred['in_test']] - pure_regr_pred['logmass'][pure_regr_pred['in_test']]
+pure_regr_err = 10.**( pure_regr_pred['logmass_pred'][pure_regr_pred['in_test']] - pure_regr_pred['logmass'][pure_regr_pred['in_test']] )  - 1.
 
-contam_regr_err = contam_regr_pred['logmass_pred'][contam_regr_pred['in_test']] - contam_regr_pred['logmass'][contam_regr_pred['in_test']]
+contam_regr_err = 10.**( contam_regr_pred['logmass_pred'][contam_regr_pred['in_test']] - contam_regr_pred['logmass'][contam_regr_pred['in_test']] )  - 1.
 
 
 print('\n~~~~~ PLOTTING CNN RESULTS ~~~~~')
@@ -147,11 +147,11 @@ matt.binnedplot(pure_regr_pred['logmass'][pure_regr_pred['in_test']],
                 pure_regr_err,
                 n=25, percentiles=[34], median=True, ax=ax2, 
                 label='pure $M(\sigma)$',c='m', errorbar=False, names=False, log=0)
-             
+"""              
 matt.binnedplot(contam_regr_pred['logmass'][contam_regr_pred['in_test']],
                 contam_regr_err,
                 n=25, percentiles=[34], median=True, ax=ax2, 
-                label='contam $M(\sigma)$',c='r', errorbar=False, names=False, log=0)
+                label='contam $M(\sigma)$',c='r', errorbar=False, names=False, log=0)"""
 
 matt.binnedplot(sdm_dat[:,1],sdm_err,n=25, percentiles=[34], median=True, ax=ax2, label='sdm',c='g', errorbar=False, names=False, log=0)
 

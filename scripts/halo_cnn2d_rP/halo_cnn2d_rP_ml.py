@@ -17,6 +17,7 @@ import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv1D, MaxPooling1D
+from keras.layers import Conv2D, MaxPooling2D
 from keras.constraints import maxnorm
 from keras.wrappers.scikit_learn import KerasRegressor
 
@@ -29,28 +30,31 @@ import tools.matt_tools as matt
 ## ML PARAMETERS
 par = OrderedDict([ 
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn/'),
-    ('model_name'   ,   'halo_cnn1d_r'),
+    ('model_name'   ,   'halo_cnn2d_rP'),
 
     ('logM_range'   ,   (13., 16.)), # None
+    
+    ('nbins'        ,   10),
 
     ('batch_size'   ,   50),
-    ('epochs'       ,   20),
+    ('epochs'       ,   50),
     ('learning'     ,   0.001),
-
-    ('validation'   ,   False), # Make a validation set from training data
+    
+    ('validation'   ,   True) # Make a validation set from training data
+    
 ])
-
+# For debugging
+max_fold = 3
 
 ## ML Model Declaration
 def baseline_model():
     model = Sequential()
 
-    # """ CONV LAYER 1
-    model.add(Conv1D(10, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Conv1D(24, 5, input_shape=x_train.shape[1:], padding='same', activation='relu', kernel_constraint=maxnorm(3)))
 
-    model.add(Conv1D(5, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
+    model.add(Conv1D(10, 3, activation='relu', padding='same', kernel_constraint=maxnorm(3)))
 
-    # model.add(MaxPooling1D(pool_size=2))
+    # model.add(MaxPooling1D(pool_size=4))
 
     model.add(Dropout(0.25))
     model.add(Flatten())
@@ -58,15 +62,33 @@ def baseline_model():
     model.add(Dense(128,  activation='relu', kernel_constraint=maxnorm(3)))
     model.add(Dense(64,  activation='relu', kernel_constraint=maxnorm(3)))
     
-    model.add(Dense(1))
+    model.add(Dense(par['nbins'], activation='softmax'))
 
     opt = keras.optimizers.adam(lr=par['learning'], decay=1e-6)
 
-    model.compile(loss='mean_squared_error',
+    model.compile(loss='categorical_crossentropy',
                   optimizer=opt,
                   metrics=[])
     
     return model
+
+# Managing posterior model output
+bin_edges = np.linspace(0, 1, par['nbins']+1)
+def y_to_bins(y_point):
+    y_binned = np.zeros(shape=(len(y_point), par['nbins']), dtype=int)
+
+    for i in range(par['nbins']):
+        y_binned[:,i] = (y_point >= bin_edges[i]) & (y_point <= bin_edges[i+1])
+        
+    return y_binned
+
+
+bin_centers = [np.mean((bin_edges[i],bin_edges[i+1])) for i in range(par['nbins'])]
+def bins_to_y(y_binned):
+    y_point = np.dot(y_binned, bin_centers)
+    
+    return y_point
+
 
 print('\n~~~~~ MODEL PARAMETERS ~~~~~')
 for key in par.keys():
@@ -95,7 +117,10 @@ par = data_params
 
 
 print('\n~~~~~ PREPARING X,Y ~~~~~')
-X = np.reshape(X, list(X.shape) + [1])
+# X = np.reshape(X, list(X.shape) + [1])
+
+par['logmass_min'] = Y.min()
+par['logmass_max'] = Y.max()
 
 if par['logM_range']==None:
     par['logmass_min'] = Y.min()
@@ -107,7 +132,6 @@ else:
 
 Y -= par['logmass_min']
 Y /= (par['logmass_max'] - par['logmass_min'])
-Y = 2*Y - 1
 
 
 par['nfolds'] = data['fold'].max()+ 1 
@@ -115,14 +139,15 @@ par['nfolds'] = data['fold'].max()+ 1
 test_folds = np.arange(par['nfolds'])
 
 print('\n~~~~~ TRAINING ~~~~~')
-Y_pred = np.zeros(len(Y))
+Y_pred = np.zeros(shape=(len(Y),))
 hist_all = []
 model_all = []
+temp_eval_time = []
 
 t0 = time.time()
 
 for fold_curr in test_folds:
-    
+
     # Find relevant clusters in fold
     print('\n~~~~~ TEST FOLD #' + str(fold_curr) + ' ~~~~~\n')
     in_train = data['in_train'] & (data['fold'] != fold_curr)
@@ -150,13 +175,19 @@ for fold_curr in test_folds:
 
 
     # Data augmentation
-    print('AUGMENTING TRAIN DATA')
+    print('\nAUGMENTING TRAIN DATA')
     # flip vlos axis
     x_train = np.append(x_train, np.flip(x_train,1),axis=0)
     y_train = np.append(y_train, y_train,axis=0)
 
     print('# of train: '+str(len(y_train)))
     print('# of test: ' + str(np.sum(in_test)))
+    
+    
+    # Convert to binned posterior
+    print('\nCONVERTING TO BINNED POSTERIOR')
+    y_train = y_to_bins(y_train)
+    y_val = y_to_bins(y_val)
 
     ## MODEL
     print ('\nINITIALIZING MODEL')
@@ -172,24 +203,37 @@ for fold_curr in test_folds:
                       validation_data=(x_val, y_val) if (par['validation']==True) else None,
                       shuffle=True,
                       verbose=2)
-                      
+    
+    # MAKE PREDICTIONS
+    print('\nMAKING PREDICTIONS, CONVERTING TO POINT ESTIMATION')
+
     np.put( Y_pred, 
             np.where(in_test), 
-            model.predict(X[in_test]))
+            bins_to_y(model.predict(X[in_test])) )
+
+    temp = X[in_test]
+    t_temp0 = time.time()
+    temp = model.predict(temp)
+    t_temp1 = time.time()
+    eval_time = (t_temp1-t_temp0)/np.sum(in_test)
+    temp_eval_time.append(eval_time)
+
+    print('eval_time: ', eval_time)
+
     
     hist_all.append(hist)
     model_all.append(model)
 
 t1 = time.time()
 print('\nTraining time: ' + str((t1-t0)/60.) + ' minutes')
+print('\nAverage evaluation time: ', np.mean(temp_eval_time), 'seconds')
 print('\n~~~~~ PREPARING RESULTS ~~~~~')
 
-Y = (Y+1.)/2.
-Y_pred = (Y_pred + 1.)/2.
 
 y_test = (par['logmass_max'] - par['logmass_min'])*Y[data['in_test']] + par['logmass_min']
-
 y_pred= (par['logmass_max'] - par['logmass_min'])*Y_pred[data['in_test']] + par['logmass_min']
+# y_test = Y[data['in_test']]
+# y_pred = Y_pred[data['in_test']]
     
 y_test = y_test.flatten()
 y_pred = y_pred.flatten()
@@ -247,22 +291,25 @@ if par['validation']==True: loss_dat['val'] = np.array([hist_all[i].history['val
 
 np.save(os.path.join(model_dir, model_name_save + '_loss.npy'), loss_dat)
 
+
 print('~~~~~ PLOTTING ~~~~~')
 
 f = plt.figure(figsize=[3,3])
 
 for i in [0]:#range(len(test_folds)):
     plt.plot(   hist_all[i].history['loss'],
-                label='training')
+                label='training',
+                linewidth=3)
                 
     if par['validation']==True:
         plt.plot(   hist_all[i].history['val_loss'],
-                    label='validation')
+                    label='validation',
+                    linewidth=3)
     
 
-plt.legend(fontsize=8)
-plt.xlabel('Epochs ',fontsize=10)
-plt.ylabel('Loss',fontsize=10)
+plt.legend(fontsize=12)
+plt.xlabel('Epochs ',fontsize=12)
+plt.ylabel('Loss',fontsize=12)
 plt.tight_layout()
 f.savefig(os.path.join(model_dir, model_name_save + '_loss.pdf'))
 
@@ -272,7 +319,7 @@ print('Saved training figures\n')
 
 
 
-print('Saving output data\n')
+print('~~~~~ SAVING OUTPUT DATA ~~~~~')
 
 
 save_dict = {
@@ -293,4 +340,3 @@ print('Output data saved.')
 
 
 print('All finished!')
-
