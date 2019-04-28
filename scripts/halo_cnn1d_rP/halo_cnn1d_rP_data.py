@@ -31,7 +31,7 @@ par = OrderedDict([
     ('in_folder'    ,   'data_mocks'),
     ('out_folder'   ,   'data_processed'),
     
-    ('data_file'    ,   'Rockstar_UM_z=0.117_contam_med.p'),
+    ('data_file'    ,   'Rockstar_UM_z=0.000_contam.p'),
     
     ('subsample'    ,   1.0 ), # Fraction by which to randomly subsample data
     
@@ -41,6 +41,7 @@ par = OrderedDict([
     
     ('nfolds'       ,   10 ),
     
+    ('train_range'  ,   [None, None]),
     ('test_range'   ,   (10**13.9, 10**15.1)),
     
     ('dn_dlogm'		,	10.**-5.2),
@@ -92,7 +93,11 @@ in_train = np.array([False]*len(cat))
 in_test = np.array([False]*len(cat))
 
 log_m = np.log10(cat.prop['M200c'])
-bin_edges = np.arange(log_m.min() * 0.9999, (log_m.max() + par['dlogm'])*1.0001, par['dlogm'])
+
+log_m_min = log_m.min() if par['train_range'][0] is None else np.log10(par['train_range'][0])
+log_m_max = log_m.max() if par['train_range'][1] is None else np.log10(par['train_range'][1])
+bin_edges = np.arange(log_m_min * 0.9999, (log_m_max + par['dlogm'])*1.0001, par['dlogm'])
+
 n_per_bin = int(par['dn_dlogm']*1000**3*par['dlogm'])
 
 for j in range(len(bin_edges)):
@@ -102,6 +107,9 @@ for j in range(len(bin_edges)):
         in_train[bin_ind] = True # Assign train members
     else:
         in_train[np.random.choice(bin_ind, n_per_bin, replace=False)] = True
+
+if par['test_range'][0] is None: par['test_range'][0] = cat.prop['M200c'].min()
+if par['test_range'][1] is None: par['test_range'][1] = cat.prop['M200c'].max()
 
 in_test[cat.prop.index[(cat.prop['rotation'] < 3) & 
         (cat.prop['M200c'] > par['test_range'][0]) &
@@ -255,7 +263,7 @@ if (len(mass_train) > 0) & (len(mass_test)>0):
     _ = matt.histplot(  mass_test, n=100, log=1, box=True,
                         label='test', ax=ax)
 
-plt.xlim(mass_train.min(), mass_train.max())
+plt.xlim(min(mass_train.min(),mass_test.min()), max(mass_train.max(),mass_test.max()))
 
 plt.xlabel('$\log(M_{200c})$', fontsize=16)
 plt.ylabel('$dn/d\log(M_{200c})$', fontsize=16)

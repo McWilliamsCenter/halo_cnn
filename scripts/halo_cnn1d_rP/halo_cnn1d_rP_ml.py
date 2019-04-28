@@ -33,10 +33,10 @@ par = OrderedDict([
 
     ('logM_range'   ,   (13., 16.)), # None
     
-    ('nbins'        ,   10),
+    ('nbins'        ,   100),
 
     ('batch_size'   ,   50),
-    ('epochs'       ,   50),
+    ('epochs'       ,   20),
     ('learning'     ,   0.001),
 
     ('validation'   ,   True), # Make a validation set from training data

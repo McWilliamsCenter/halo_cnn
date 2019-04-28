@@ -52,16 +52,37 @@ from tools.catalog import Catalog
 
 ## ~~~~~~ PARAMETERS ~~~~~~
 par = OrderedDict([ 
-    ('catalog_name' ,   'Rockstar_UM_z=0.117'),
-    
     ('wdir'         ,   '/home/mho1/scratch/halo_cnn'),
     ('in_folder'    ,   'data_raw'),
     ('out_folder'   ,   'data_mocks'),
     
-    ('host_file'    ,   'MDPL2_Rockstar_snap:120_v3.csv'),
-    ('gal_file'     ,   'sfr_catalog_0.895100.npy'),
-    
-    ('z'            ,   0.117),
+    # ~~~~ Previously run mocks ~~~~
+#    ('catalog_name' ,   'Rockstar_UM_z=0.117'),
+#    ('host_file'    ,   'cosmosim/MDPL2_Rockstar_snap:120_v3.csv'),
+#    ('gal_file'     ,   'um_mdpl2_hearin/sfr_catalog_0.895100.npy'),
+#    ('z'            ,   0.117),
+
+#    ('catalog_name' ,   'Rockstar_UM_z=0.000'),
+#    ('host_file'    ,   'cosmosim/MDPL2_Rockstar_snap:125.csv'),
+#    ('gal_file'     ,   'um_mdpl2_hearin/sfr_catalog_1.000000.npy'),
+#    ('z'            ,   0.),
+
+#    ('catalog_name' ,   'Rockstar_UM_z=0.045'),
+#    ('host_file'    ,   'cosmosim/MDPL2_Rockstar_snap:123.csv'),
+#    ('gal_file'     ,   'um_mdpl2_hearin/sfr_catalog_0.956700.npy'),
+#    ('z'            ,   0.045),
+
+#    ('catalog_name' ,   'Rockstar_UM_z=0.194'),
+#    ('host_file'    ,   'cosmosim/MDPL2_Rockstar_snap:117.csv'),
+#    ('gal_file'     ,   'um_mdpl2_hearin/sfr_catalog_0.837600.npy'),
+#    ('z'            ,   0.194),
+
+   ('catalog_name' ,   'Rockstar_UM_z=0.248'),
+   ('host_file'    ,   'cosmosim/MDPL2_Rockstar_snap:115.csv'),
+   ('gal_file'     ,   'um_mdpl2_hearin/sfr_catalog_0.801300.npy'),
+   ('z'            ,   0.248),
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
     ('min_mass'     ,   10**(13.5)),
     ('min_richness' ,   10),
@@ -81,11 +102,11 @@ par = OrderedDict([
                  })
     ])
 ## For running
-n_proc = 10
-np.random.seed(693201)
+n_proc = 4
+np.random.seed(918265)
 
 ## For debugging
-debug = True
+debug = False
 
 if debug:
     print('\n'+20*'>'+' DEBUGGING '+20*'<')

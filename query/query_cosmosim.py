@@ -28,7 +28,7 @@ z:      0.0     0.022   0.045   0.069   0.093   0.117   0.142   0.168   0.194
 """
 
 save_dir = '/home/mho1/scratch/halo_cnn/data_query'
-snapnum = 117
+snapnum = 125
 Macc_min = '1e11'
 cache = True# Store query locally
 
@@ -40,14 +40,13 @@ if not os.path.isdir(os.path.join(subset_dir)):
 query_name =  'MDPL2_Rockstar_' + 'snap:' + str(snapnum) + ''
 
 print('\n')
-print('~~~~~ Quering ' + query_name + '~~~~~\n')
+print('~~~~~ Quering ' + query_name + ' ~~~~~\n')
 
 
 
 
 CS = CosmoSim()
-CS.login(username="maho3", password="password")
-
+CS.login(username="maho3", password="password", reenter_password=True)
 
 dx = 200
 
@@ -87,6 +86,7 @@ for i in range(len(x_mins)):
     time.sleep(1.)
     
 # jobids = ['1530314084338316129','1530314089939852270','1530314095439811024','1530314101335877394','1530314106876914667']
+# jobids = ['1555351906874893824','1555355632396568594','1555355640815960618','1555355649357331949','1555355658220621714']
 
     
 ## CHECK QUERIES, SAVE DATA, RESUBMIT QUERIES AS NECESSARY

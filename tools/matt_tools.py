@@ -132,26 +132,27 @@ def binnedplot(X,Y, n=10, percentiles = [35], median=True, mean=False,
 
     if log==1:
         if mean: 
-            ax.semilogy(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
+            l = ax.semilogy(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
         if median: 
-            ax.semilogy(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
+            l = ax.semilogy(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
     elif log==2:
         x_incr = 10**np.array(x_incr)
         y_mean = 10**np.array(y_mean)
         y_median = 10**np.array(y_median)
         y_percent = 10**np.array(y_percent)
         
-        
         if mean: 
-            ax.loglog(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
+            l = ax.loglog(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
         if median: 
-            ax.loglog(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
+            l = ax.loglog(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
     else:
         if mean: 
-            ax.plot(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
+            l = ax.plot(x_incr,y_mean, label=label+names*'mean',color='g', lw=lw, linestyle=linestyle)
         if median: 
-            ax.plot(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
-            
+            l = ax.plot(x_incr,y_median, label=label+names*'median',color=c, lw=lw, linestyle=linestyle)
+
+    c = l[0].get_c()
+
     for i in range(len(percentiles)):
                         
         if errorbar== False:
