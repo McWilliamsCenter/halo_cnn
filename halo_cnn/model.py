@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 
+from keras.models import Model
 from keras.layers import Input, Dense, Dropout, Activation, Flatten
 from keras.layers import Conv1D, MaxPooling1D
 from keras.constraints import maxnorm
@@ -22,26 +23,37 @@ class BaseHaloCNNRegressor():
         self.batch_size = batch_size
         self.epochs = epochs
         self.learning_rate = learning_rate
+        self.decay = decay
+
         self.history = None
+        self.trained = False
         
         # build ML model
         self.model = self._build_model()
+
+        return
+
+    def __str__(self):
+        self.model.summary()
+        return ''
     
     def _build_input(self):
         return Input(shape=self.input_shape)
         
     def _build_model(self):
-        model = self._build_input()
-        model = Conv1D(filters=10, kernel_size=5, padding='same', 
-                       activation='relu', kernel_constraint=maxnorm(3))(model)
-        model = Conv1D(filters=5, kernel_size=3, padding='same', 
-                       activation='relu', kernel_constraint=maxnorm(3))(model)
-        model = Dropout(0.25)(model)
-        model = Flatten()(model)
-        model = Dense(units=128, activation='relu', kernel_constraint=maxnorm(3))(model)
-        model = Dense(units=64, activation='relu', kernel_constraint=maxnorm(3))(model)
-        model = Dense(units=1, activation='linear')
-        
+        in_layer = self._build_input()
+        x = Conv1D(filters=10, kernel_size=5, padding='same', 
+                   activation='relu', kernel_constraint=maxnorm(3))(in_layer)
+        x = Conv1D(filters=5, kernel_size=3, padding='same', 
+                   activation='relu', kernel_constraint=maxnorm(3))(x)
+        x = Dropout(0.25)(x)
+        x = Flatten()(x)
+        x = Dense(units=128, activation='relu', kernel_constraint=maxnorm(3))(x)
+        x = Dense(units=64, activation='relu', kernel_constraint=maxnorm(3))(x)
+        x = Dense(units=1, activation='linear')(x)
+
+        model = Model(in_layer, x)
+
         opt = adam(lr=self.learning_rate, decay=self.decay)
         
         model.compile(loss='mean_squared_error', optimizer=opt, metrics=[])
@@ -52,7 +64,7 @@ class BaseHaloCNNRegressor():
     def fit(self, x_train, y_train, x_val=None, y_val=None):
     
         self.history = self.model.fit(x_train, y_train,
-                                      validation_data = (x_val,y_val) \ 
+                                      validation_data = (x_val,y_val) \
                                                         if (x_val is not None) & \
                                                            (y_val is not None) \
                                                         else None,
@@ -60,13 +72,15 @@ class BaseHaloCNNRegressor():
                                       epochs = self.epochs,
                                       shuffle = True,
                                       verbose = 2)
+        self.trained = True
+
         return self.history
     
     def predict(self, x):
         return model.predict(x)
         
     def plot_history(self, ax=None, label=None):
-        if self.history is None: raise Exception('Model is untrained.')
+        if ~self.trained: raise Exception('Model is untrained.')
             
         if ax is None:
             f, ax = plt.subplots()
@@ -75,7 +89,8 @@ class BaseHaloCNNRegressor():
             label=(str(label)+' ')*(label is not None)+'training')
             
         if 'val_loss' in self.history.keys():
-            label=(str(label)+' ')*(label is not None)+'validation')
+            ax.plot(self.history['loss'], 
+                    label=(str(label)+' ')*(label is not None)+'validation')
         
         return f, ax
     
@@ -83,7 +98,9 @@ class BaseHaloCNNRegressor():
         if filename[-3:] != '.h5': raise Warning('.h5 filetype is recommended')
         
         self.model.save_weights(filename)
+        return
     
     def load(self, filename):
         self.model.load_weights(filename)
+        return
         
