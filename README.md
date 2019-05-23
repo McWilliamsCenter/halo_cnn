@@ -1,19 +1,9 @@
 # halo_cnn
-Workspace for applying Convolutional Neural Networks to galaxy cluster mass measurements
+Repository for CNN models as presented in [A Robust and Efficient Deep Learning Method for Dynamical Mass Measurements of Galaxy Clusters](https://ui.adsabs.harvard.edu/abs/2019arXiv190205950H/abstract). This repository is meant to serve as an example of the code used to perform this deep learning analysis, not as a fully-developed utility for public use.
 
-## Project is under development
-I am currently in the process of formalizing code for publication. This involves commenting, formatting, and cleaning up this repository. Stay tuned!
+## Mocks
+The mock cluster catalog generation script is [make_mocks.py](mocks/make_mocks.py). It uses halo data from the [MultiDark Planck 2 simulation](https://www.cosmosim.org/cms/simulations/mdpl2/) Rockstar catalog and a galaxy catalog generated using [UniverseMachine](https://ui.adsabs.harvard.edu/abs/2019MNRAS.tmp.1134B/abstract). The generated catalogs are stored as Catalog objects, detailed in [catalog.py](tools/catalog.py). For a full previously-generated mock catalog, reach out to the corresponding author at <mho1@andrew.cmu.edu>.
 
-## ML Pipeline
-Given a model_name,
-1. model_name_data.py : Preprocess data and evaluate data characteristics
-2. model_name_ml.py : Run ML and plot training statistics
-3. model_name_plot.py : Plot predictions and results
+## Models
+A brief tutorial on dataset preprocessing and model fitting is given in <tutorial.ipynb>. Data processing is handled by the HaloCNNDataManager class in [data.py](halo_cnn/data.py). Models are represented as the BaseHaloCNNRegressor class in [model.py](halo_cnn/model.py).
 
-## Main Directories
-* bash - bash scripts intended for 'ease-of-use.' Manages loading correct directories
-* jobs - jobs to be submitted to BRIDGES queue
-* notebooks - jupyter workspaces
-* old - old stuff
-* scripts - Python code for setting up, running ML model
-* tools - General use tools (figure plotting, data loading, etc.)
