@@ -1,10 +1,12 @@
 # This file contains the manager for loading and preprocessing
 # halo_cnn data
 
+import os
 import numpy as np
 import multiprocessing as mp
 import pandas as pd
 import tqdm
+import pickle
 
 from scipy.stats import gaussian_kde
 from functools import partial
@@ -15,23 +17,7 @@ from functools import partial
 from tools.catalog import Catalog
 
 
-class HaloCNNDataManager():
-    def __init__(self, input_shape,
-                 bandwidth=0.25, sample_rate=1.0, nfolds=10,
-                 mass_range_train=(None, None), mass_range_test=(None, None),
-                 dn_dlogm=10.**-5.2, dlogm=0.02,
-                 vcut=None, aperture=None):
-        # initialization
-        self.input_shape = input_shape
-        self.bandwidth = bandwidth
-        self.sample_rate = sample_rate
-        self.nfolds = nfolds
-        self.mass_range_train = mass_range_train
-        self.mass_range_test = mass_range_test
-        self.dn_dlogm = dn_dlogm
-        self.dlogm = dlogm
-        self.vcut = vcut
-        self.aperture = aperture
+class BaseHaloCNNDataManager():
 
     def load_catalog(self, filename, cache=True):
         """Loads a catalog file from disk and saves vcut,aperture settings"""
@@ -116,8 +102,22 @@ class HaloCNNDataManager():
 
         return in_array
 
+    def _assign_val(self, catalog, in_test):
+        """Assign a subset of test cluster mocks to validation set."""
+        ids_test = catalog.prop['rockstarId'][in_test].drop_duplicates()
+        ids_test = np.random.choice(ids_test,
+                                    int((1.-self.val_split)*len(ids_test)),
+                                    replace=False)
+        in_test_new = in_test & \
+            catalog.prop['rockstarId'].isin(ids_test).values
+        in_val = in_test & ~in_test_new
+
+        return in_test_new, in_val
+
     def _assign_folds(self, catalog):
         """Use rank-ordering to assign folds evenly for all masses"""
+        if self.nfolds == 1:
+            return np.full(len(catalog), 1)
         ids_sorted = catalog.prop[['rockstarId', 'M200c']].drop_duplicates()
         ids_sorted = ids_sorted.sort_values(['M200c'])['rockstarId']
         fold_ind = pd.Series(np.arange(len(ids_sorted)) % self.nfolds,
@@ -217,10 +217,12 @@ class HaloCNNDataManager():
                 pool.imap(helper, data, chunksize=int(len(data)/(10*n_proc))),
                 total=len(data))))
 
+        pdfs = np.reshape(pdfs, (len(catalog), *(self.input_shape)))
+
         return pdfs
 
     def preprocess(self, catalog, data_fields,
-                   in_train=None, in_test=None,
+                   in_train=None, in_test=None, in_val=None,
                    folds=None, n_proc=None):
 
         # initialize
@@ -238,11 +240,15 @@ class HaloCNNDataManager():
             in_test = self._assign_traintest(catalog, set_type='all',
                                              mass_range=self.mass_range_test)
 
+        if in_val is None:
+            in_test, in_val = self._assign_val(catalog, in_test)
+
         # clean
-        keep = (in_train + in_test) > 0
+        keep = (in_train + in_test + in_val) > 0
         catalog = catalog[keep]
         in_train = in_train[keep]
         in_test = in_test[keep]
+        in_val = in_val[keep]
 
         # assign folds
         if folds is None:
@@ -253,7 +259,7 @@ class HaloCNNDataManager():
 
         # build output
         dtype = [('id', '<i8'), ('logmass', '<f4'), ('Ngal', '<i8'),
-                 ('in_train', '?'), ('in_test', '?'),
+                 ('in_train', '?'), ('in_test', '?'), ('in_val', '?'),
                  ('fold', '<i4'), ('pdf', '<f4', self.input_shape)]
 
         out = np.zeros(shape=(len(catalog),), dtype=dtype)
@@ -262,10 +268,59 @@ class HaloCNNDataManager():
         out['Ngal'] = catalog.prop['Ngal']
         out['in_train'] = in_train
         out['in_test'] = in_test
+        out['in_val'] = in_val
         out['fold'] = folds
         out['pdf'] = pdfs
 
         return out
+
+    def augment_flip(self, X, Y, axis=1):
+        X = np.append(X, np.flip(X, axis=axis), axis=0)
+        Y = np.append(Y, Y, axis=0)
+        return X, Y
+
+    def save(self, fileheader, version=True):
+        # version-ing
+        if version & os.path.isfile(fileheader+'_datpar.p'):
+            v = 1
+            while v < 10e4:
+                if os.path.isfile(fileheader+str(v)+'_datpar.p'):
+                    v += 1
+                else:
+                    fileheader += str(v)
+                    break
+
+        # save data manager parameters
+        with open(fileheader+'_datpar.p', 'wb') as f:
+            pickle.dump(self.__dict__, f)
+        print('Saved data manager to %s' % (fileheader+'_datpar.p'))
+
+    def load(self, fileheader):
+        # load data manager parameters
+        with open(fileheader+'_datpar.p', 'rb') as f:
+            tmp_dict = pickle.load(f)
+        self.__dict__.update(tmp_dict)
+        print('Loaded data manager from %s' % (fileheader+'_datpar.p'))
+
+
+class HaloCNNRegressManager(BaseHaloCNNDataManager):
+    def __init__(self, input_shape=None,
+                 bandwidth=0.25, sample_rate=1.0, nfolds=10, val_split=0.,
+                 mass_range_train=(None, None), mass_range_test=(None, None),
+                 dn_dlogm=10.**-5.2, dlogm=0.02,
+                 vcut=None, aperture=None):
+        # initialization
+        self.input_shape = input_shape
+        self.bandwidth = bandwidth
+        self.sample_rate = sample_rate
+        self.nfolds = nfolds
+        self.mass_range_train = mass_range_train
+        self.mass_range_test = mass_range_test
+        self.val_split = val_split
+        self.dn_dlogm = dn_dlogm
+        self.dlogm = dlogm
+        self.vcut = vcut
+        self.aperture = aperture
 
     def regularize(self, Y, use_cache=False):
         if use_cache:
@@ -284,13 +339,3 @@ class HaloCNNDataManager():
         return ((Y*(self.reg_limits[1]-self.reg_limits[0])) +
                 self.reg_limits[0] + self.reg_limits[1])/2.
 
-    def augment_flip(self, X, Y, axis=1):
-        X = np.append(X, np.flip(X, axis=axis), axis=0)
-        Y = np.append(Y, Y, axis=0)
-        return X, Y
-
-    def save(self, filename):
-        return
-
-    def load(self, filename):
-        return

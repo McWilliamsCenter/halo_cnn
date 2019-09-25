@@ -59,49 +59,15 @@ par = OrderedDict([
     ('in_folder',   'data_raw'),
     ('out_folder',   'data_mocks'),
 
-    # ~~~~ Previously run mocks ~~~~
-
     # UM with z=0.117
-    ('catalog_name',    'Rockstar_UM_cutSM_z=0.117'),
+    ('catalog_name',    'Rockstar_UM_z=0.117'),
     ('host_file',       'cosmosim/MDPL2_Rockstar_snap:120_v3.csv'),
     ('gal_file',        'um_mdpl2_hearin/sfr_catalog_0.895100.npy'),
     ('z',               0.117),
 
-    # # UM with z=0.000
-    # ('catalog_name',    'Rockstar_UM_z=0.000'),
-    # ('host_file',       'cosmosim/MDPL2_Rockstar_snap:125.csv'),
-    # ('gal_file',        'um_mdpl2_hearin/sfr_catalog_1.000000.npy'),
-    # ('z',               0.),
-
-    # # UM with z=0.045
-    # ('catalog_name',    'Rockstar_UM_z=0.045'),
-    # ('host_file',       'cosmosim/MDPL2_Rockstar_snap:123.csv'),
-    # ('gal_file',        'um_mdpl2_hearin/sfr_catalog_0.956700.npy'),
-    # ('z',               0.045),
-
-    # # UM with z=0.194
-    # ('catalog_name',    'Rockstar_UM_z=0.194'),
-    # ('host_file',       'cosmosim/MDPL2_Rockstar_snap:117.csv'),
-    # ('gal_file',        'um_mdpl2_hearin/sfr_catalog_0.837600.npy'),
-    # ('z',               0.194),
-
-    # # UM with z=0.248
-    # ('catalog_name',    'Rockstar_UM_z=0.248'),
-    # ('host_file',       'cosmosim/MDPL2_Rockstar_snap:115.csv'),
-    # ('gal_file',        'um_mdpl2_hearin/sfr_catalog_0.801300.npy'),
-    # ('z',               0.248),
-
-    # MD with z=0.117
-    # ('catalog_name',    'Rockstar_MD_z=0.117'),
-    # ('host_file',       'cosmosim/MDPL2_Rockstar_snap:120_v3.csv'),
-    # ('gal_file',        None),
-    # ('z',               0.117),
-
-
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
     ('host_min_mass',   10**(13.5)),
     ('gal_min_mass',    10**(9.5)),
+    ('gal_mass_def',    'obs_sm'),
     ('min_richness',    10),
 
     ('cut_size',        'medium'),
@@ -120,7 +86,7 @@ par = OrderedDict([
 ])
 # For running
 n_proc = 4
-np.random.seed(4193)
+np.random.seed(9834234)
 
 # For debugging
 debug = False
@@ -141,11 +107,9 @@ cosmo = par['cosmo']
 if par['cut_size'] == 'small':
     aperture = 1.1  # the radial aperture in comoving Mpc/h
     vcut = 1570.  # maximum velocity is vmean +/- vcut in km/s
-
 elif par['cut_size'] == 'medium':
     aperture = 1.6  # Mpc/h
-    vcut = 2500.  # km/s
-
+    vcut = 2200.  # km/s
 elif par['cut_size'] == 'large':
     aperture = 2.3  # Mpc/h
     vcut = 3785.  # km/s
@@ -342,8 +306,7 @@ host_data = host_data[(host_data['upId'] == -1) &
                       (host_data['M200c'] >= par['host_min_mass'])]
 
 gal_data = gal_data[(gal_data['upId'] != -1) &
-                    # (gal_data['Macc'] >= par['gal_min_mass'])]
-                    (gal_data['obs_sm'] >= par['gal_min_mass'])]
+                    (gal_data[par['gal_mass_def']] >= par['gal_min_mass'])]
 
 if debug:
     host_data = host_data.sample(int(10**3.5), replace=False)
@@ -836,8 +799,9 @@ pure_catalog.prop['Ngal'] = [len(x) for x in pure_catalog.gal]
 contam_catalog.prop['Ngal'] = [len(x) for x in contam_catalog.gal]
 
 # sigv
-pure_catalog.prop['sigv'] = [np.std(x['vlos']) for x in pure_catalog.gal]
-contam_catalog.prop['sigv'] = [np.std(x['vlos']) for x in contam_catalog.gal]
+gapper = lambda x: np.sqrt(np.sum((x-np.mean(x))**2)/(len(x)-1))
+pure_catalog.prop['sigv'] = [gapper(x['vlos']) for x in pure_catalog.gal]
+contam_catalog.prop['sigv'] = [gapper(x['vlos']) for x in contam_catalog.gal]
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ SAVE DATA ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

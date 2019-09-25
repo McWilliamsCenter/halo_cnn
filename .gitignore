@@ -17,5 +17,5 @@ old/
 tools/__pycache__/
 
 # python files #
-.pyc
-.cpython-36.pyc
+*.pyc
+*.cpython-36.pyc
