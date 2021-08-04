@@ -48,6 +48,7 @@ def binned_plot(X, Y, n=10, percentiles=[0, 34],
         y = Y[(X >= bin_edges[i]) & (X < bin_edges[i+1])]
 
         if len(y) == 0:
+            bin_data[i] = None
             continue
 
         y_p = np.percentile(y, calc_percent)
