@@ -133,6 +133,7 @@ class BaseModel():
         self.model.load_weights(fileheader+'_model.h5')
         if verbose:
             print('Loaded model from %s' % (fileheader+'_model.h5'))
+        return self
 
 
 class Regressor(BaseModel):
@@ -154,7 +155,7 @@ class Regressor(BaseModel):
 
         model = Model(in_layer, x)
 
-        opt = Adam(lr=self.learning_rate)
+        opt = Adam(learning_rate=self.learning_rate)
 
         model.compile(loss='mean_squared_error', optimizer=opt,
                       metrics=['mean_squared_error'])

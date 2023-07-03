@@ -61,7 +61,7 @@ class PointDropoutRegressor(BaseModel):
 
         model = Model(in_layer, x)
 
-        opt = Adam(lr=self.learning_rate)
+        opt = Adam(learning_rate=self.learning_rate)
 
         model.compile(loss='mean_squared_error', optimizer=opt, metrics=['mse'])
 

@@ -26,7 +26,7 @@ class GaussRegressor(Regressor):
 
         model = Model(in_layer, x)
 
-        opt = Adam(lr=self.learning_rate)
+        opt = Adam(learning_rate=self.learning_rate)
 
         def loss(y_true, y_pred):
             return K.mean(K.square(y_true[:, 0] - y_pred[:, 0])*K.exp(-y_pred[:, 1])+
@@ -72,7 +72,7 @@ class GaussDropoutRegressor(GaussRegressor):
 
         model = Model(in_layer, x)
 
-        opt = Adam(lr=self.learning_rate)
+        opt = Adam(learning_rate=self.learning_rate)
 
         def loss(y_true, y_pred):
             return K.mean(K.square(y_true[:, 0] - y_pred[:, 0])*K.exp(-y_pred[:, 1])+

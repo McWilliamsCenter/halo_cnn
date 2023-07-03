@@ -1,9 +1,11 @@
 # halo_cnn
 Repository for CNN models for galaxy cluster mass estimation as presented in:
+
 * [A Robust and Efficient Deep Learning Method for Dynamical Mass Measurements of Galaxy Clusters](https://ui.adsabs.harvard.edu/abs/2019arXiv190205950H/abstract).
 * [Approximate Bayesian Uncertainties on Deep Learning Dynamical Mass Estimates of Galaxy Clusters](https://ui.adsabs.harvard.edu/abs/2021ApJ...908..204H/abstract)
 * [The dynamical mass of the Coma cluster from deep learning](https://ui.adsabs.harvard.edu/abs/2022NatAs...6..936H/abstract)
 * [Benchmarks and Explanations for Deep Learning Estimates of X-ray Galaxy Cluster Masses](https://ui.adsabs.harvard.edu/abs/2023arXiv230300005H/abstract)
+
 This repository is meant to serve as an example of the code used to perform this deep learning analysis, not as a fully-developed utility for public use.
 
 ## Mocks

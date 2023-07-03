@@ -41,7 +41,7 @@ class Classifier(BaseModel):
 
         model = Model(in_layer, x)
 
-        opt = Adam(lr=self.learning_rate)
+        opt = Adam(learning_rate=self.learning_rate)
         
         def mse(y_true, y_pred):
             return K.mean(K.square(self._bin_to_point(y_true) - 
@@ -86,7 +86,7 @@ class DropoutClassifier(Classifier):
 
         model = Model(in_layer, x)
 
-        opt = Adam(lr=self.learning_rate)
+        opt = Adam(learning_rate=self.learning_rate)
         
         def mse(y_true, y_pred):
             return K.mean(K.square(self._bin_to_point(y_true) - 

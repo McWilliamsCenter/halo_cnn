@@ -241,6 +241,8 @@ class BaseManager():
                 sample_range = (-1.*self.vcut, self.vcut)
             elif data_fields[i] == 'Rproj':
                 sample_range = (0, self.aperture)
+            elif (data_fields[i] == 'xproj') or (data_fields[i] == 'yproj'):
+                sample_range = (-self.aperture, self.aperture)
             else:
                 raise Exception('Unrecognized data field: %s' % data_fields[i])
 
@@ -264,11 +266,15 @@ class BaseManager():
         """
         sample = self._build_mesh(data_fields)
 
-        data = [np.stack([catalog.gal[i][field] for field in ['vlos','Rproj']],
-                         axis=1) for i in range(len(catalog))]
+        if reweightR is not None:
+            data = [np.stack([catalog.gal[i][field] for field in  ['vlos','Rproj']], # data_fields], #
+                             axis=1) for i in range(len(catalog))]
+        else:
+            data = [np.stack([catalog.gal[i][field] for field in  data_fields], #['vlos','Rproj']], # 
+                             axis=1) for i in range(len(catalog))]
         
         helper = partial(self.sample_kde, 
-                         sample=sample, 
+                         sample=sample,
                          reweightR=reweightR)
 
         if (n_proc is None) | (n_proc > mp.cpu_count()):
@@ -276,10 +282,13 @@ class BaseManager():
 
 
         print('running with %i processes...'%n_proc)
-        with mp.Pool(processes=n_proc) as pool:
-            pdfs = np.array(list(tqdm.tqdm(
-                pool.imap(helper, data, chunksize=int(len(data)/(10*n_proc))),
-                total=len(data))))
+        if n_proc == 1:
+            pdfs = np.array([helper(data[i]) for i in tqdm.tqdm(range(len(data)))])
+        else:
+            with mp.Pool(processes=n_proc) as pool:
+                pdfs = np.array(list(tqdm.tqdm(
+                    pool.imap(helper, data, ), # chunksize=int(len(data)/(100*n_proc))),
+                    total=len(data))))
 
         pdfs = np.reshape(pdfs, (len(catalog), *(self.input_shape)))
 
